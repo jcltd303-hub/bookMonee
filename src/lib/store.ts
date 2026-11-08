@@ -33,6 +33,8 @@ type RunState = {
   quotes: BuyerQuote[];
   /** Books staged per desk, waiting for a prepaid label to clear. */
   desk: Record<string, DeskItem[]>;
+  /** Books taken from the box currently open, so replacements stay honest. */
+  boxTakes: number;
   /** On-device trading agent. */
   q: QAgent;
   qProgress: number;
@@ -50,6 +52,8 @@ type RunState = {
   setActiveStopId: (id: string) => void;
   pushPick: (pick: Judgement) => void;
   setQuotes: (quotes: BuyerQuote[]) => void;
+  noteTake: () => void;
+  resetBox: () => void;
   stage: (buyerId: string, item: DeskItem) => void;
   unstage: (buyerId: string, isbn: string) => void;
   clearDesk: () => void;
@@ -102,6 +106,7 @@ export const useRun = create<RunState>()(
       shelfReplay: [],
       quotes: [],
       desk: {},
+      boxTakes: 0,
       q: makeQ(),
       qProgress: 0,
       qRunning: false,
@@ -121,6 +126,8 @@ export const useRun = create<RunState>()(
           picks: [pick, ...state.picks.filter((item) => item.isbn !== pick.isbn)].slice(0, 24),
         })),
       setQuotes: (quotes) => set({ quotes }),
+      noteTake: () => set((state) => ({ boxTakes: state.boxTakes + 1 })),
+      resetBox: () => set({ boxTakes: 0 }),
       stage: (buyerId, item) =>
         set((state) => {
           const list = state.desk[buyerId] ?? [];

@@ -62,27 +62,14 @@ testable and what makes them portable to a worker later.
 
 ## Deploying
 
-`.github/workflows/deploy-vercel.yml` typechecks every push, then builds with the
-Vercel CLI and ships the prebuilt output. Pushes to `main` go to production,
-pull requests get a preview URL, and a smoke check confirms the deployed site
-actually serves the app shell before the job goes green.
+Vercel is configured on the Vercel side, not in this repo: build command
+`npm run build`, output from the Nitro `vercel` preset in `.vercel/output`,
+Node 22 or newer (`@tanstack/react-start` requires `>=22.12.0`, pinned in
+`package.json`). No CI workflow ships the app.
 
-Add three repository secrets under **Settings → Secrets and variables →
-Actions**:
-
-| Secret | Where it comes from |
-| --- | --- |
-| `VERCEL_TOKEN` | Vercel → Account Settings → Tokens → Create |
-| `VERCEL_ORG_ID` | `npx vercel link` in the repo, then `.vercel/project.json` |
-| `VERCEL_PROJECT_ID` | same file as above |
-
-Until they exist the deploy job fails with an explicit message naming what is
-missing, rather than a confusing CLI error.
-
-Two things worth knowing. First, do not also connect this repo through Vercel's
-own Git integration while this workflow is active, or every push deploys twice —
-pick one. Second, the build needs Node 22 or newer (`@tanstack/react-start`
-requires `>=22.12.0`, and `package.json` now says so); the workflow pins it.
+`public/tesseract/` is generated at build time by `scripts/copy-ocr-assets.mjs`
+(the OCR engine's worker, WASM core and English model, about 11 MB) and is not
+committed.
 
 ## Layout
 

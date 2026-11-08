@@ -1,4 +1,5 @@
 .vercel/
+public/tesseract/
 node_modules/
 dist/
 .vercel/output/

@@ -47,7 +47,13 @@ self.addEventListener("fetch", (event) => {
       if (hit) return hit;
       return fetch(request)
         .then((response) => {
-          if (response.ok && (url.pathname.startsWith("/assets/") || url.pathname.startsWith("/_build/"))) {
+          // The OCR engine's worker, WASM core and language model are large and only
+          // fetched on demand; cache them the first time so a shelf reads offline later.
+          const cacheable =
+            url.pathname.startsWith("/assets/") ||
+            url.pathname.startsWith("/_build/") ||
+            url.pathname.startsWith("/tesseract/");
+          if (response.ok && cacheable) {
             const copy = response.clone();
             caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => undefined);
           }
