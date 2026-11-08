@@ -1,0 +1,109 @@
+name: Deploy to Vercel
+
+# Every push to main ships to production. Pull requests only build, so a broken
+# commit fails in CI before it can reach the live app.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: vercel-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+  NODE_OPTIONS: --max-old-space-size=4096
+
+jobs:
+  check:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+
+  deploy:
+    name: ${{ github.event_name == 'pull_request' && 'Preview' || 'Production' }}
+    needs: check
+    if: github.event_name != 'pull_request' || secrets.VERCEL_TOKEN != ''
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event_name == 'pull_request' && 'preview' || 'production' }}
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check deploy secrets
+        run: |
+          missing=""
+          [ -z "$VERCEL_TOKEN" ] && missing="$missing VERCEL_TOKEN"
+          [ -z "$VERCEL_ORG_ID" ] && missing="$missing VERCEL_ORG_ID"
+          [ -z "$VERCEL_PROJECT_ID" ] && missing="$missing VERCEL_PROJECT_ID"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing — add them under Settings → Secrets and variables → Actions. See the Deploy section of README.md."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Pull Vercel environment
+        run: |
+          target="${{ github.event_name == 'pull_request' && 'preview' || 'production' }}"
+          npx --yes vercel@latest pull --yes --environment="$target" --token="$VERCEL_TOKEN"
+
+      - name: Build with Vercel
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            npx --yes vercel@latest build --token="$VERCEL_TOKEN"
+          else
+            npx --yes vercel@latest build --prod --token="$VERCEL_TOKEN"
+          fi
+
+      - name: Deploy prebuilt output
+        id: deploy
+        run: |
+          set -o pipefail
+          args="--prebuilt --token=$VERCEL_TOKEN"
+          if [ "${{ github.event_name }}" != "pull_request" ]; then args="$args --prod"; fi
+          npx --yes vercel@latest deploy $args | tee /tmp/deploy.log
+          url=$(grep -oE 'https://[a-zA-Z0-9._-]+\.vercel\.app' /tmp/deploy.log | tail -1)
+          if [ -z "$url" ]; then
+            echo "::error::Vercel deploy did not return a URL."
+            exit 1
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "### Deployed $url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke check
+        if: github.event_name != 'pull_request'
+        run: |
+          url="${{ steps.deploy.outputs.url }}"
+          for attempt in $(seq 1 12); do
+            code=$(curl -s -o /tmp/page.html -w '%{http_code}' "$url" || true)
+            if [ "$code" = "200" ] && grep -q "Spine Route" /tmp/page.html; then
+              echo "Live and serving the app shell: $url"
+              exit 0
+            fi
+            echo "attempt $attempt: HTTP $code"
+            sleep 5
+          done
+          echo "::error::Deployed site never served the app shell at $url"
+          exit 1
