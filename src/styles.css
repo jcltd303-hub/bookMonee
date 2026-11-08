@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #101410;
+  --color-surface: #1a211c;
+  --color-surface-2: #242c26;
+  --color-fg: #f3efe4;
+  --color-muted: #a7b0a0;
+  --color-primary: #e2a23a;
+  --color-primary-fg: #1a1408;
+  --color-accent: #8faf78;
+  --color-border: #313a32;
+  --font-sans: "Public Sans", "Avenir Next", "Segoe UI", sans-serif;
+  --font-display: "Fraunces", Georgia, serif;
+  --radius: 0.9rem;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  h1, h2, h3 {
+    font-family: var(--font-display);
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+}
+
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  background: var(--color-surface);
+  font-family: var(--font-sans);
+}
+.leaflet-div-icon.pin {
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+  border: 2px solid var(--color-bg);
+  border-radius: 999px;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 13px;
+}
+.leaflet-div-icon.pin-on {
+  outline: 2px solid var(--color-fg);
+}
+.leaflet-control-attribution {
+  background: color-mix(in srgb, var(--color-bg) 80%, transparent);
+  color: var(--color-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}

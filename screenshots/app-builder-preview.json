@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Spine Route",
+      "hasCanvas": false,
+      "bodyTextLen": 782,
+      "bodyTextHash": "eb9d67910c649d8796cc94c442d5094adfd79814408745208deaff4f3164cc27",
+      "bodyTextPrefix": "Denver micro-libraries Spine Route 70 mapped book boxes. Walk th",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Spine Route",
+      "hasCanvas": false,
+      "bodyTextLen": 782,
+      "bodyTextHash": "eb9d67910c649d8796cc94c442d5094adfd79814408745208deaff4f3164cc27",
+      "bodyTextPrefix": "Denver micro-libraries Spine Route 70 mapped book boxes. Walk th",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}
