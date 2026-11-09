@@ -9,3 +9,4 @@ dist/
 *.log
 .bench/
 .bench-test/
+.diag*.mjs
