@@ -38,7 +38,7 @@ const DEFAULTS: Required<SegmentOptions> = {
   minWidthRatio: 0.012,
   maxWidthRatio: 0.16,
   edgeSigmas: 0.9,
-  minSpacingRatio: 0.02,
+  minSpacingRatio: 0.016,
   limit: 8,
 };
 
