@@ -12,7 +12,10 @@ scanning, quoting, bin packing, the trading agent — runs in the browser.
 **Route.** The map carries 71 book boxes and 6 mutual-aid pins across Denver,
 plus a region filter built from the city directory brief: central, northwest,
 southeast, northeast, southwest, and a separate metro bucket so the planner
-stops routing people to Aurora or Golden by default. The walker scores each
+stops routing people to Aurora or Golden by default. Every one of the 77 pins is
+assigned to a section. Choosing a section reframes the map to its bounds, the
+legend matches the markers, and tapping a pin opens its address, access notes,
+charter number, a walking-directions link and the source OSM node. The walker scores each
 candidate stop by expected cash minus a quarter per mile, corrected by a small
 residual net that learns from the payouts you actually log.
 

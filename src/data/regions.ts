@@ -85,6 +85,24 @@ export function stopsInRegion(stops: Stop[], regionId: string): Stop[] {
   return stops.filter((stop) => regionIdOf(stop.neighborhood) === regionId);
 }
 
+/** Bounding box of a stop list, for framing the map on a section. */
+export function boundsOf(stops: Stop[]): { south: number; west: number; north: number; east: number } | null {
+  if (!stops.length) return null;
+  let south = stops[0].lat;
+  let north = stops[0].lat;
+  let west = stops[0].lon;
+  let east = stops[0].lon;
+  for (const stop of stops) {
+    if (stop.lat < south) south = stop.lat;
+    if (stop.lat > north) north = stop.lat;
+    if (stop.lon < west) west = stop.lon;
+    if (stop.lon > east) east = stop.lon;
+  }
+  // A single pin still needs a box to fit to.
+  const pad = 0.004;
+  return { south: south - pad, west: west - pad, north: north + pad, east: east + pad };
+}
+
 /** Counts per region, for the filter chips. */
 export function regionCounts(stops: Stop[]): Record<string, number> {
   const counts: Record<string, number> = {};

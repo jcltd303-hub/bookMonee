@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { LocateFixed, Navigation } from "lucide-react";
 import { bookcases, CIVIC_CENTER, libraries, mutualAid } from "@/lib/catalog";
-import { REGIONS, denverStops, regionCounts, stopsInRegion } from "@/data/regions";
+import { REGIONS, boundsOf, denverStops, regionCounts, regionOf, stopsInRegion } from "@/data/regions";
 import { briefAnchors, directorySources } from "@/data/sources";
 import { nearestStops, planRoute } from "@/lib/agents/decide";
 import { formatMiles, formatUsd, walkUrl } from "@/lib/geo";
@@ -35,6 +35,9 @@ export function RunTab() {
 
   const pool = region === "denver" ? denverStops(bookcases) : stopsInRegion(bookcases, region);
   const counts = regionCounts(bookcases);
+  const focus = boundsOf(pool);
+  const section = REGIONS.find((item) => item.id === region);
+  const active = bookcases.find((stop) => stop.id === activeStopId) ?? pool.find((stop) => stop.id === activeStopId);
   const nearest = nearestStops(start, 4, pool);
   const miles = route.reduce((sum, leg) => sum + leg.miles, 0);
   const cash = route.reduce((sum, leg) => sum + Math.max(0, leg.scoreUsd), 0);
@@ -72,9 +75,11 @@ export function RunTab() {
               start={start}
               route={route}
               boxes={pool}
-              mutual={mutualAid}
+              mutual={region === "denver" ? denverStops(mutualAid) : stopsInRegion(mutualAid, region)}
               showMutual={showMutual}
               activeId={activeStopId}
+              focus={focus}
+              focusKey={region}
               onStart={(point) => {
                 setStart(point);
                 setLabel("Dropped pin");
@@ -85,15 +90,35 @@ export function RunTab() {
             <div className="h-full bg-surface-2" />
           )}
         </div>
-        <p className="border-t border-border px-4 py-2 text-sm text-muted">
-          Tap the map to move the start. Brass numbers are the loop. Sage dots are book boxes. Gray dots are mutual aid, and they are not stops.
-        </p>
+        <div className="grid gap-2 border-t border-border px-4 py-3">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block size-3 rounded-full border-[3px] border-primary" /> start
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block size-3.5 rounded-full bg-primary text-center text-[8px] leading-[14px] text-primary-fg">1</span> loop order
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block size-3 rounded-full bg-accent" /> book box
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block size-3 rounded-full border border-muted bg-bg" /> mutual aid
+            </span>
+          </div>
+          <p className="text-sm text-muted">
+            {section ? `${section.name} · ${pool.length} boxes · ${section.denver ? "inside the city" : "outside the city and county line"}` : `All of Denver · ${pool.length} boxes`}
+            {" · "}tap the map to move the start, tap a pin to open it.
+          </p>
+        </div>
       </section>
 
       <section className="grid gap-2">
         <h2 className="text-xl">Region</h2>
         <div className="flex flex-wrap gap-2">
-          {[{ id: "denver", name: "All of Denver" }, ...REGIONS.map((item) => ({ id: item.id, name: item.name }))].map((chip) => (
+          {[
+            { id: "denver", name: "All of Denver", count: denverStops(bookcases).length },
+            ...REGIONS.map((item) => ({ id: item.id, name: item.name, count: counts[item.id] ?? 0 })),
+          ].map((chip) => (
             <button
               key={chip.id}
               type="button"
@@ -101,7 +126,7 @@ export function RunTab() {
               className={`h-9 rounded-full border px-3 text-sm font-semibold ${region === chip.id ? "border-primary bg-primary text-primary-fg" : "border-border bg-surface text-fg"}`}
             >
               {chip.name}
-              <span className="ml-1 tabular-nums opacity-70">{counts[chip.id] ?? 0}</span>
+              <span className="ml-1 tabular-nums opacity-70">{chip.count}</span>
             </button>
           ))}
         </div>
@@ -111,6 +136,39 @@ export function RunTab() {
             : REGIONS.find((item) => item.id === region)?.blurb ?? "Every mapped box."}
         </p>
       </section>
+
+      {active ? (
+        <section className="grid gap-2 rounded-xl border border-primary bg-surface p-4">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-lg">{active.name}</h2>
+            <span className="text-xs font-semibold uppercase tracking-wide text-muted">{active.kind}</span>
+          </div>
+          <p className="text-sm text-muted">
+            {active.address || "No street address on the map pin"} · {active.neighborhood}
+            {regionOf(active.neighborhood) ? ` · ${regionOf(active.neighborhood)!.name}` : ""}
+            {active.charter ? ` · charter ${active.charter}` : ""}
+          </p>
+          <p className="text-sm text-muted">
+            {active.access === "unknown" ? "Access not recorded" : active.access}
+            {active.notes ? ` · ${active.notes}` : ""}
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <a
+              href={walkUrl(active.lat, active.lon)}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-accent text-sm font-semibold text-bg"
+            >
+              <Navigation className="size-4" />
+              Walk there
+            </a>
+            <a
+              href={active.sourceUrl}
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-border text-sm font-semibold"
+            >
+              Source pin
+            </a>
+          </div>
+        </section>
+      ) : null}
 
       <section className="grid gap-3 rounded-xl border border-border bg-surface p-4">
         <div className="flex items-baseline justify-between gap-3">
