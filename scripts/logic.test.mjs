@@ -13,6 +13,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   assess,
+  assignTitles,
   decodeEntities,
   extractIsbn,
   sameBook,
@@ -59,6 +60,35 @@ test("imported names lose their HTML entities", () => {
   assert.equal(decodeEntities("Bell &amp; Book"), "Bell & Book");
   assert.equal(decodeEntities("Curly&#39;s Corner"), "Curly's Corner");
   assert.equal(decodeEntities("Little Free Library"), "Little Free Library", "plain text is untouched");
+});
+
+test("shelf matching resolves reads against each other, not just the catalogue", () => {
+  // Two reads both lean toward the same title; the weaker one has a better second
+  // choice, and joint assignment finds it. Independent retrieval would give both the
+  // same book and lose the other.
+  const reads = [
+    { id: "TEACH YOURSEL", candidates: [{ title: "Teach Yourself French", score: 0.62 }, { title: "Larousse", score: 0.3 }] },
+    { id: "LAROUSSE DICT", candidates: [{ title: "Teach Yourself French", score: 0.55 }, { title: "Larousse", score: 0.58 }] },
+  ];
+  const assigned = assignTitles(reads);
+  const byId = Object.fromEntries(assigned.map((row) => [row.id, row.title]));
+  assert.equal(byId["TEACH YOURSEL"], "Teach Yourself French");
+  assert.equal(byId["LAROUSSE DICT"], "Larousse", "the weaker claim moves to its second choice");
+});
+
+test("two copies of one book are allowed when the reads are identical", () => {
+  const reads = [
+    { id: "DUNE", candidates: [{ title: "Dune", score: 0.9 }] },
+    { id: "DUNE", candidates: [{ title: "Dune", score: 0.9 }] },
+  ];
+  assert.equal(assignTitles(reads).length, 2, "a duplicate spine is not a conflict");
+  assert.ok(assignTitles(reads).every((row) => row.title === "Dune"));
+});
+
+test("a read with nothing above the floor still keeps its best guess", () => {
+  const assigned = assignTitles([{ id: "???", candidates: [{ title: "Something", score: 0.1 }] }], 0.25);
+  assert.equal(assigned.length, 1);
+  assert.equal(assigned[0].title, "Something");
 });
 
 test("the plausibility gate rejects symbol soup", () => {

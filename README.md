@@ -201,6 +201,17 @@ moves a desk by under a tenth and a persistent bias takes a dozen to show. Rates
 clamped to 0.3–3× the prior so no run of odd books can reprice a desk, and the Train tab
 shows prior, current rate and observation count per desk with a reset button.
 
+## Shelf matching
+
+Each spine is resolved on its own while it streams, but a shelf is a *set* of books, and
+independent retrieval cannot see that two reads are competing for one title. Following
+Llabrés et al., *Image-text matching for large-scale book collections* (2024), which
+shows many-to-many matching beating per-book retrieval, `src/lib/scan/match.ts` runs a
+greedy maximum-weight assignment over the shelf once every read is in: each read keeps
+the best title no one else is better placed to claim. Duplicate copies are allowed when
+two reads are near-identical, since a little free library can hold two of the same book
+— a deliberate departure from the paper, whose catalogue is a library inventory.
+
 ## Tests
 
 `npm run test:logic` bundles the pure logic and runs it under `node --test`: ISBN

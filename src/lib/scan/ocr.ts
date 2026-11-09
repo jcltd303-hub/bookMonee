@@ -201,10 +201,12 @@ export async function readSpineWith(
     // Gate on: believability leads. Gate off: the old confidence-times-letters rank,
     // so the benchmark's A/B compares against what the code actually did before.
     const letters = (text.match(/[A-Za-z]/g) ?? []).length;
-    // Believability carries most of the weight: on real photos the correct rotation
-    // often comes back less confident than a wrong one.
+    // Known words first: a correct read of a spine usually contains at least one word
+    // the vocabulary recognises, while a wrong rotation produces letter soup that can
+    // still score well on shape. Confidence is a weak tiebreaker — on real photos the
+    // right rotation is often the less confident one.
     const rank = gateOn
-      ? plausibility.score * 0.85 + (confidence / 100) * 0.15
+      ? plausibility.knownRatio * 1 + plausibility.score * 0.5 + (confidence / 100) * 0.2
       : (confidence / 100) * Math.min(1, letters / 20);
     if (!best || rank > best.rank) best = { read, rank };
     // A strong read on the first vertical rotation is enough; skip the rest.

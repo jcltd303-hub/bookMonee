@@ -4,6 +4,7 @@ import { judgeShelf } from "@/lib/agents/decide";
 
 import { imageDataToRgba, readShelf, releaseOcr, type OcrProgress, type SpineRead } from "@/lib/scan/ocr";
 import { resolveSpine, resolveText, type SpineGuess } from "@/lib/scan/resolve";
+import { assignTitles } from "@/lib/scan/match";
 import { segmentFrame, type SpineBox } from "@/lib/scan/spines";
 import { catalogVocabulary } from "@/lib/agents/rag";
 import { blurCue, sharpnessOf, watchSharpness, type Sharpness } from "@/lib/scan/blur";
@@ -198,6 +199,8 @@ export function ShelfScanner({ onVerify }: { onVerify: () => void }) {
       );
       if (!reads.length) {
         setError("Read the frames but no text came back. Try a brighter angle or a steadier hand.");
+      } else {
+        refineShelf();
       }
     } catch {
       setError("Reading failed. The first read has to download the OCR engine once — check the connection and retry.");
@@ -222,6 +225,32 @@ export function ShelfScanner({ onVerify }: { onVerify: () => void }) {
     } finally {
       setBusy(false);
     }
+  }
+
+  /**
+   * Match the reads against each other once the whole shelf is in.
+   *
+   * Each spine is resolved on its own while it streams, which cannot see that two reads
+   * are competing for one title. This re-orders each read's guesses so the jointly
+   * assigned title comes first, without changing what was read.
+   */
+  function refineShelf() {
+    setResults((current) => {
+      if (current.length < 2) return current;
+      const assigned = assignTitles(
+        current.map((entry) => ({
+          id: entry.read.text,
+          candidates: entry.guesses.map((guess) => ({ title: guess.title, score: guess.similarity })),
+        })),
+      );
+      const wanted = new Map(assigned.map((row) => [row.id, row.title]));
+      return current.map((entry) => {
+        const title = wanted.get(entry.read.text);
+        const index = title ? entry.guesses.findIndex((guess) => guess.title === title) : -1;
+        if (index <= 0) return entry;
+        return { ...entry, guesses: [entry.guesses[index], ...entry.guesses.filter((_, i) => i !== index)] };
+      });
+    });
   }
 
   function take(result: ShelfResult, guess: SpineGuess) {

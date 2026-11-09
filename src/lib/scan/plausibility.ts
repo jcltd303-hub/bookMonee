@@ -66,7 +66,9 @@ export function assess(text: string, vocabulary?: Set<string>): Plausibility {
   const letters = (trimmed.match(/[A-Za-z]/g) ?? []).length;
   const symbols = (trimmed.match(SYMBOL) ?? []).length;
   const tokens = words(trimmed);
-  const singleLetters = tokens.filter((token) => token.length === 1).length;
+  // Only alphabetic single characters are noise. A trailing "3 4" from a price or an
+  // edition mark is not, and counting it rejected real reads like "DAVID JASON: 3 4".
+  const singleLetters = tokens.filter((token) => token.length === 1 && /[a-z]/i.test(token)).length;
   const singleLetterRatio = tokens.length ? singleLetters / tokens.length : 1;
 
   if (!letters || !tokens.length) {
@@ -104,8 +106,10 @@ export function assess(text: string, vocabulary?: Set<string>): Plausibility {
   // A title needs at least one real word in it. Without this, greyscale preprocessing
   // handed back "ad a &" at 0.74 — short, letter-heavy, and not a book.
   const longestWord = tokens.reduce((longest, token) => Math.max(longest, token.length), 0);
+  // Four letters, not six: "CAINE", "DUNE" and "POTTER" are titles. The word-length and
+  // score checks are what keep noise out, and they still reject "4 hN" and "ad a &".
   const plausible =
-    score >= 0.55 && letters >= 6 && singleLetterRatio <= 0.4 && longestWord >= 4;
+    score >= 0.55 && letters >= 4 && singleLetterRatio <= 0.4 && longestWord >= 4;
 
   return {
     score,
@@ -118,7 +122,7 @@ export function assess(text: string, vocabulary?: Set<string>): Plausibility {
       ? knownRatio > 0
         ? "known words"
         : "word-shaped"
-      : letters < 6
+      : letters < 4
         ? "too little text"
         : longestWord < 4
           ? "no word long enough"
