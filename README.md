@@ -125,10 +125,13 @@ Together: 10/17 → 13/17 titles, noise still 0/3. Three titles are still never 
 (`TEACH YOURSELF`, `LAROUSSE`, `POTTER`); the dump shows them inside boxes spanning several
 spines, which is a resolution problem the correction tap covers rather than a gate problem.
 
-Two segmentation attempts failed and were reverted: scoring edge consistency down a column
-(10/17 — it fires on text strokes too), and halving the edge spacing to 0.011 (36 boxes a
-row but spines cut in half, so `CAINE` reads as `CAI` + `NE`, 10/17). Over-segmentation
-costs more titles than merging does.
+Three attempts failed and were reverted: scoring edge consistency down a column (10/17 — it
+fires on text strokes too), halving the edge spacing to 0.011 (36 boxes a row but spines cut
+in half, so `CAINE` reads as `CAI` + `NE`, 10/17), and adding the halves of wide boxes as
+extra candidates (13/17, unchanged, at nearly double the runtime — and the box holding
+`LAROUSSE` was 119px against a split threshold of ~144, so it was never split anyway).
+Over-segmentation costs more titles than merging does, and the three unread titles are not
+reachable by adjusting the segmenter.
 
 Getting the real-photo numbers off zero took a grid search over preprocessing, scale,
 page-segmentation mode and crop insets. What helped:
