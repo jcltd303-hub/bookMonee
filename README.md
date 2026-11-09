@@ -121,7 +121,22 @@ spines (3 titles at inset 0, 2 at 6%, 1 at 12%); detecting text lines and OCRing
 one separately (1 title against 3); scaling by the tallest ink run instead of a flat
 multiplier (4 of 6 rejected, and slower); and raising the source resolution on its own.
 
-Still not good enough. Two spines in six read, and both are partial. The dumps show
+Tuning Tesseract is now exhausted, measured rather than assumed: a capitals-only
+character whitelist changes nothing (1 title either way), adaptive (Sauvola) thresholding
+changes nothing, and single-line mode (PSM 7) reads *zero* titles. The stock English
+model is the ceiling.
+
+So the app stops pretending the engine is enough and puts the reader in the loop:
+
+- Every spine card shows what the camera read in an editable field with a **Find book**
+  button. Correcting a misread costs one tap and a second lookup — far cheaper than
+  anything that could be done to the image.
+- A barcode scan **upgrades** the OCR guess it confirms instead of sitting beside it as
+  a second book (`supersedes` in `src/lib/scan/dedupe.ts`, tested). Confirmed ISBNs
+  always beat guesses; a guess never displaces a confirmed one.
+- Reads under 55% confidence are labelled as needing a check.
+
+Still not good enough on its own. Two spines in six read, and both are partial. The dumps show
 crops that are plain to a human while the engine returns `ARnvEN FARR COMMUNITY FARM`,
 so what is left is not tuning: it needs a recogniser that handles stylised type better
 than Tesseract's stock English model, or a scene-text model trained on spines. The

@@ -4,7 +4,7 @@ import { judgeShelf } from "@/lib/agents/decide";
 import { quotesFor } from "@/lib/market/quote";
 import { quoteBookFromPick, stagedUsd } from "@/lib/market/from-judgement";
 import { imageDataToRgba, readShelf, releaseOcr, type OcrProgress, type SpineRead } from "@/lib/scan/ocr";
-import { resolveSpine, type SpineGuess } from "@/lib/scan/resolve";
+import { resolveSpine, resolveText, type SpineGuess } from "@/lib/scan/resolve";
 import { segmentFrame, type SpineBox } from "@/lib/scan/spines";
 import { catalogVocabulary } from "@/lib/agents/rag";
 import { blurCue, sharpnessOf, watchSharpness, type Sharpness } from "@/lib/scan/blur";
@@ -202,6 +202,24 @@ export function ShelfScanner({ onVerify }: { onVerify: () => void }) {
     }
   }
 
+  /** Re-resolve a spine after the reader corrects what the engine misheard. */
+  async function retry(result: ShelfResult, text: string) {
+    setBusy(true);
+    try {
+      const guesses = await resolveText(text, result.read.confidence, { offline });
+      if (!guesses.length) return;
+      setResults((current) =>
+        current.map((entry) =>
+          entry.read.text === result.read.text
+            ? { ...entry, guesses, read: { ...entry.read, text } }
+            : entry,
+        ),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function take(result: ShelfResult, guess: SpineGuess) {
     const read = guess.isbn ? toIsbn13(guess.isbn) : null;
     const isbn = read ?? `ocr-${hash(result.read.text)}`;
@@ -307,6 +325,7 @@ export function ShelfScanner({ onVerify }: { onVerify: () => void }) {
               result={result}
               leavesLeft={leavesLeft}
               onTake={take}
+              onRetry={(text) => void retry(result, text)}
               onDismiss={() =>
                 setResults((current) => current.filter((entry) => entry.read.text !== result.read.text))
               }
@@ -322,14 +341,17 @@ function SpineCard({
   result,
   leavesLeft,
   onTake,
+  onRetry,
   onDismiss,
 }: {
   result: ShelfResult;
   leavesLeft: number;
   onTake: (result: ShelfResult, guess: SpineGuess) => void;
+  onRetry: (text: string) => void;
   onDismiss: () => void;
 }) {
   const [choice, setChoice] = useState(0);
+  const [draft, setDraft] = useState(result.read.text);
   const guess = result.guesses[choice];
   if (!guess) return null;
   return (
@@ -347,10 +369,29 @@ function SpineCard({
         </div>
         {result.taken ? <Check className="size-5 text-primary" /> : null}
       </div>
-      <p className="rounded-lg bg-surface-2 px-2 py-1 text-xs text-muted">“{result.read.text.slice(0, 90)}”</p>
+      <label className="grid gap-1">
+        <span className="text-xs text-muted">What the camera read — edit it if it misheard</span>
+        <div className="grid grid-cols-[1fr_auto] gap-2">
+          <input
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            className="h-10 min-w-0 rounded-lg border border-border bg-bg px-2 text-xs text-fg outline-none"
+            aria-label="Corrected spine text"
+          />
+          <button
+            type="button"
+            disabled={draft.trim() === result.read.text.trim() || !draft.trim()}
+            onClick={() => onRetry(draft)}
+            className="h-10 rounded-lg border border-border px-3 text-xs font-semibold disabled:opacity-40"
+          >
+            Find book
+          </button>
+        </div>
+      </label>
       <p className="text-xs text-muted">
         Matched by {labelFor(guess.source)}
         {guess.similarity ? ` · ${Math.round(guess.similarity * 100)}%` : ""}
+        {result.read.confidence < 55 ? " · low confidence, check the title" : ""}
       </p>
       {result.guesses.length > 1 ? (
         <div className="flex flex-wrap gap-1">

@@ -15,6 +15,7 @@ import {
   assess,
   extractIsbn,
   sameBook,
+  supersedes,
   toIsbn13,
   quotesFor,
   offerFrom,
@@ -64,6 +65,18 @@ test("a spine read twice is one book", () => {
     sameBook({ isbn: "9781119659587", title: "Organic Chemistry" }, { isbn: "9780134685991", title: "Organic Chemistry" }),
     false,
     "different ISBNs are different books",
+  );
+});
+
+test("a barcode scan upgrades the OCR guess it confirms", () => {
+  const ocr = { isbn: "ocr-7f2a", title: "AMERICAN DECORATION THOMAS JAYNE" };
+  const barcode = { isbn: "9781580934056", title: "American Decoration" };
+  assert.equal(supersedes(barcode, ocr), true, "confirmed read replaces the guess");
+  assert.equal(supersedes(ocr, barcode), false, "a guess never replaces a confirmed ISBN");
+  assert.equal(
+    supersedes({ isbn: "9781119659587", title: "Organic Chemistry" }, { isbn: "ocr-x", title: "THE HUNGER GAMES" }),
+    false,
+    "unrelated books both survive",
   );
 });
 

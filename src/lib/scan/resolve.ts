@@ -193,7 +193,22 @@ export async function resolveSpine(
   read: SpineRead,
   opts: { offline?: boolean } = {},
 ): Promise<SpineGuess[]> {
-  const text = cleanSpineText(read.text);
+  return resolveText(read.text, read.confidence, opts);
+}
+
+/**
+ * Resolve arbitrary text into book guesses.
+ *
+ * Separate from `resolveSpine` so the UI can re-resolve what a person typed: when the
+ * engine misreads a spine, correcting the title and asking again is far cheaper than
+ * anything that could be done to the image.
+ */
+export async function resolveText(
+  raw: string,
+  confidence = 0,
+  opts: { offline?: boolean } = {},
+): Promise<SpineGuess[]> {
+  const text = cleanSpineText(raw);
   if (!text) return [];
   const guesses: SpineGuess[] = [];
 
@@ -209,7 +224,7 @@ export async function resolveSpine(
         subject: meta.subjects[0],
         source: "isbn",
         similarity: 1,
-        confidence: read.confidence,
+        confidence: confidence,
       });
     } else {
       guesses.push({
@@ -219,7 +234,7 @@ export async function resolveSpine(
         isbn,
         source: "isbn",
         similarity: 0.9,
-        confidence: read.confidence,
+        confidence: confidence,
       });
     }
   }
@@ -234,13 +249,13 @@ export async function resolveSpine(
       subject: match.subject,
       source: "catalog",
       similarity: match.similarity,
-      confidence: read.confidence,
+      confidence: confidence,
     });
   }
 
   if (!guesses.length && !opts.offline && title.length >= 4) {
     const remote = await openLibrarySearch(title);
-    for (const guess of remote) guesses.push({ ...guess, confidence: read.confidence });
+    for (const guess of remote) guesses.push({ ...guess, confidence: confidence });
   }
 
   if (!guesses.length) {
@@ -250,7 +265,7 @@ export async function resolveSpine(
       author: "",
       source: "raw",
       similarity: 0,
-      confidence: read.confidence,
+      confidence: confidence,
     });
   }
 

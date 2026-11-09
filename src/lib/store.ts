@@ -6,7 +6,7 @@ import { FLUSH_PENALTY, pretrainedAgent, trainSlices } from "@/lib/agents/sim";
 import { SHIP, makeQ, qShapeOk, updateTerminal, type QAgent } from "@/lib/agents/qlearn";
 import { buyers } from "@/data/buyers";
 import { binCash } from "@/lib/market/pack";
-import { sameBook } from "@/lib/scan/dedupe";
+import { supersedes } from "@/lib/scan/dedupe";
 import type { BuyerQuote, DeskItem, Judgement, PlannedLeg, Payout } from "@/lib/types";
 
 type Sample = { x: number[]; y: number };
@@ -124,8 +124,9 @@ export const useRun = create<RunState>()(
       setActiveStopId: (activeStopId) => set({ activeStopId }),
       pushPick: (pick) =>
         set((state) => ({
-          // Panning and re-reading the same spine must not become two copies of the book.
-          picks: [pick, ...state.picks.filter((item) => !sameBook(item, pick))].slice(0, 24),
+          // Panning and re-reading the same spine must not become two copies of the book,
+          // and a barcode scan should replace the OCR guess it confirms.
+          picks: [pick, ...state.picks.filter((item) => !supersedes(pick, item))].slice(0, 24),
         })),
       setQuotes: (quotes) => set({ quotes }),
       noteTake: () => set((state) => ({ boxTakes: state.boxTakes + 1 })),

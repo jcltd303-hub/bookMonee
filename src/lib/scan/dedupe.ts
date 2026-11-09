@@ -29,6 +29,31 @@ function recall(want: Set<string>, have: Set<string>): number {
   return hit / want.size;
 }
 
+/** Title overlap in either direction, 0..1. */
+export function titleOverlap(a: string, b: string): number {
+  const left = tokens(a);
+  const right = tokens(b);
+  if (!left.size || !right.size) return 0;
+  return Math.max(recall(left, right), recall(right, left));
+}
+
+/**
+ * Does `next` replace `prev`?
+ *
+ * A barcode scan is the confirmation step: when it lands, the OCR guess it confirms
+ * should be upgraded rather than left beside it as a second book. Titles are compared
+ * loosely here because the OCR title is exactly the thing that was wrong.
+ */
+export function supersedes(next: Identity, prev: Identity): boolean {
+  const nextReal = REAL_ISBN.test(next.isbn);
+  const prevReal = REAL_ISBN.test(prev.isbn);
+  if (nextReal && prevReal) return next.isbn === prev.isbn;
+  // A confirmed ISBN always wins over a guess, whatever the titles say.
+  if (nextReal) return sameBook(next, prev) || titleOverlap(next.title, prev.title) >= 0.5;
+  if (prevReal) return false;
+  return sameBook(next, prev);
+}
+
 export function sameBook(a: Identity, b: Identity): boolean {
   if (REAL_ISBN.test(a.isbn) && REAL_ISBN.test(b.isbn)) return a.isbn === b.isbn;
   const left = tokens(a.title);
