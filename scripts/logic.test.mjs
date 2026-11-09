@@ -14,6 +14,7 @@ import assert from "node:assert/strict";
 import {
   assess,
   assignTitles,
+  boxesFromFractions,
   decodeEntities,
   extractIsbn,
   sameBook,
@@ -89,6 +90,21 @@ test("a read with nothing above the floor still keeps its best guess", () => {
   const assigned = assignTitles([{ id: "???", candidates: [{ title: "Something", score: 0.1 }] }], 0.25);
   assert.equal(assigned.length, 1);
   assert.equal(assigned[0].title, "Something");
+});
+
+test("detector boxes map from fractions onto the captured frame", () => {
+  const boxes = boxesFromFractions(
+    [
+      { x: 0.1, y: 0.2, w: 0.05, h: 0.5, score: 0.91 },
+      { x: 0.0, y: 0.0, w: 0.001, h: 0.5, score: 0.99 }, // degenerate width
+      { x: 0.9, y: 0.2, w: 0.4, h: 0.5, score: 0.8 }, // runs off the frame
+    ],
+    1000,
+    400,
+  );
+  assert.equal(boxes.length, 1, "degenerate and out-of-frame boxes are dropped");
+  assert.deepEqual({ x: boxes[0].x, y: boxes[0].y, w: boxes[0].w, h: boxes[0].h }, { x: 100, y: 80, w: 50, h: 200 });
+  assert.equal(boxes[0].score, 0.91);
 });
 
 test("the plausibility gate rejects symbol soup", () => {

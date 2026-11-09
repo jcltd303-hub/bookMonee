@@ -6,6 +6,7 @@ import { imageDataToRgba, readShelf, releaseOcr, type OcrProgress, type SpineRea
 import { resolveSpine, resolveText, type SpineGuess } from "@/lib/scan/resolve";
 import { assignTitles } from "@/lib/scan/match";
 import { segmentFrame, type SpineBox } from "@/lib/scan/spines";
+import { detectSpines } from "@/lib/scan/detect";
 import { catalogVocabulary } from "@/lib/agents/rag";
 import { blurCue, sharpnessOf, watchSharpness, type Sharpness } from "@/lib/scan/blur";
 import { toIsbn13 } from "@/lib/geo";
@@ -57,6 +58,7 @@ export function ShelfScanner({ onVerify }: { onVerify: () => void }) {
   const [results, setResults] = useState<ShelfResult[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [detector, setDetector] = useState<string>("");
 
   const leavesLeft = Math.max(0, leaveCount - boxTakes);
 
@@ -166,20 +168,25 @@ export function ShelfScanner({ onVerify }: { onVerify: () => void }) {
       const smallCtx = small.getContext("2d", { willReadFrequently: true });
       if (!smallCtx) throw new Error("no 2d context");
       smallCtx.drawImage(capture, 0, 0, small.width, small.height);
-      const frame = smallCtx.getImageData(0, 0, small.width, small.height);
-      const candidates = segmentFrame(frame.data, small.width, small.height, { limit: 6 });
+      // A trained detector first, when this deployment has one configured; the local
+      // segmenter is the fallback, not the other way round.
+      const detected = await detectSpines(capture);
+      let candidates: SpineBox[];
+      if (detected) {
+        setDetector(detected.detector);
+        candidates = detected.boxes.slice(0, 6).map((box) => ({ ...box, h: capture.height - box.y }));
+      } else {
+        setDetector("local");
+        const frame = smallCtx.getImageData(0, 0, small.width, small.height);
+        const local = segmentFrame(frame.data, small.width, small.height, { limit: 6 });
+        candidates = local.map((box) => ({ ...box, x: Math.round(box.x / scale), y: 0, w: Math.max(6, Math.round(box.w / scale)), h: capture.height }));
+      }
       if (!candidates.length) {
         setError("No spines found. Get closer, fill the frame with the shelf, and keep it steady.");
         setBusy(false);
         return;
       }
-      const scaled: SpineBox[] = candidates.map((box) => ({
-        x: Math.round(box.x / scale),
-        y: 0,
-        w: Math.max(6, Math.round(box.w / scale)),
-        h: capture.height,
-        score: box.score,
-      }));
+      const scaled: SpineBox[] = candidates;
 
       setProgress({ stage: "loading", progress: 0, detail: "starting the OCR engine" });
       const fullFrame = ctx.getImageData(0, 0, capture.width, capture.height);
@@ -294,7 +301,8 @@ export function ShelfScanner({ onVerify }: { onVerify: () => void }) {
               {cameraOn ? `${boxes.length} spine${boxes.length === 1 ? "" : "s"} in view` : "Camera off"}
             </span>
             <span className="tabular-nums text-muted">
-              {sharpness ? `focus ${Math.round(sharpness.score * 100)}%` : ""}
+              {detector ? `${detector} detector` : ""}
+              {sharpness ? ` · focus ${Math.round(sharpness.score * 100)}%` : ""}
             </span>
           </div>
           {cameraOn && sharpness && sharpness.verdict !== "sharp" ? (
