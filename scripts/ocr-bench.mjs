@@ -25,6 +25,7 @@ import { readFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { createWorker } from "tesseract.js";
 import { PNG } from "pngjs";
+import jpeg from "jpeg-js";
 import {
   prepareCrop,
   readSpineWith,
@@ -40,6 +41,8 @@ const flag = (name, fallback) => {
 const has = (name) => args.includes(`--${name}`);
 
 const dir = resolve(flag("dir", "bench/spines"));
+const shelfDir = resolve(flag("shelves", "bench/shelves"));
+const shelfManifestPath = join(shelfDir, "manifest.json");
 const verbose = has("verbose");
 const wantSegment = has("segment");
 /** --no-gate reproduces the old confidence-only behaviour, to show what the gate catches. */
@@ -54,6 +57,18 @@ if (!existsSync(manifestPath)) {
   process.exit(1);
 }
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+const shelfManifest = existsSync(shelfManifestPath) ? JSON.parse(readFileSync(shelfManifestPath, "utf8")) : [];
+
+/** PNG or JPEG, into the RGBA buffer the pipeline takes. */
+function decode(path) {
+  const bytes = readFileSync(path);
+  if (path.toLowerCase().endsWith(".png")) {
+    const png = PNG.sync.read(bytes);
+    return { data: new Uint8ClampedArray(png.data), width: png.width, height: png.height };
+  }
+  const jpg = jpeg.decode(bytes, { useTArray: true });
+  return { data: new Uint8ClampedArray(jpg.data), width: jpg.width, height: jpg.height };
+}
 
 /** How many engines to run at once — the app runs two. */
 const workers = Math.max(1, Math.min(4, Number(flag("workers", "1")) || 1));
@@ -119,9 +134,9 @@ async function runOne(entry, recognize) {
     rows.push({ file: entry.file, verdict: "missing", detail: "file not found" });
     return;
   }
-  const png = PNG.sync.read(readFileSync(file));
+  const png = decode(file);
   const source = {
-    data: new Uint8ClampedArray(png.data),
+    data: png.data,
     width: png.width,
     height: png.height,
   };
@@ -173,6 +188,48 @@ async function runOne(entry, recognize) {
 }
 
 await Promise.all(engines.map((engine) => runQueue(engine)));
+
+// --- shelf fixtures: a whole shelf row, so segmentation is scored too ---------
+let shelfExpected = 0;
+let shelfFound = 0;
+const shelfLines = [];
+let shelfCursor = 0;
+
+const runShelf = async (engine) => {
+  const recognize = makeRecognize(engine);
+  while (shelfCursor < shelfManifest.length) {
+    const entry = shelfManifest[shelfCursor];
+    shelfCursor += 1;
+    const file = join(shelfDir, entry.file);
+    if (!existsSync(file)) continue;
+    const image = decode(file);
+    const boxes = segmentFrame(image.data, image.width, image.height, { limit: 40 });
+    const texts = [];
+    for (const box of boxes) {
+      try {
+        const read = await readSpineWith(image, box, recognize, catalogVocabulary, { gate: gateOn });
+        if (read) texts.push(read.text);
+      } catch {
+        /* keep going */
+      }
+    }
+    let found = 0;
+    const misses = [];
+    for (const want of entry.expect) {
+      const best = texts.reduce((score, text) => Math.max(score, similarity(text, want)), 0);
+      if (best >= 0.6) found += 1;
+      else misses.push(`${want} (${best.toFixed(2)})`);
+    }
+    shelfExpected += entry.expect.length;
+    shelfFound += found;
+    shelfLines.push(
+      `  ${entry.file.padEnd(28)} ${found}/${entry.expect.length} titles · ${boxes.length} spines segmented · ${texts.length} readable`,
+    );
+    if (misses.length) shelfLines.push(`      missed: ${misses.join(", ")}`);
+  }
+};
+
+await Promise.all(engines.map((engine) => runShelf(engine)));
 const wallMs = Date.now() - startedAll;
 await Promise.all(engines.map((engine) => engine.terminate()));
 
@@ -206,5 +263,10 @@ console.log(
     ` · ${Math.round(totalMs / Math.max(1, rows.length))} ms per spine` +
     ` · ${workers} worker${workers === 1 ? "" : "s"}, ${wallMs} ms wall`,
 );
+if (shelfLines.length) {
+  console.log("\nshelf rows (segmentation + OCR end to end)");
+  for (const line of shelfLines) console.log(line);
+  console.log(`  ${shelfFound}/${shelfExpected} expected titles found across ${shelfManifest.length} shelf rows`);
+}
 if (rejected) console.log("  rejected a labelled spine: lower the gate in src/lib/scan/plausibility.ts, or the read is genuinely bad");
 if (falseAccepts) console.log("  accepted noise: raise the gate threshold");

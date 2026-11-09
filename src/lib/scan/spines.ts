@@ -35,9 +35,9 @@ export type SegmentOptions = {
 };
 
 const DEFAULTS: Required<SegmentOptions> = {
-  minWidthRatio: 0.02,
+  minWidthRatio: 0.012,
   maxWidthRatio: 0.16,
-  edgeSigmas: 1.1,
+  edgeSigmas: 0.9,
   minSpacingRatio: 0.02,
   limit: 8,
 };

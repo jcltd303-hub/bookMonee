@@ -1,0 +1,20 @@
+[
+  {
+    "file": "shelf-dictionaries-1.jpg",
+    "shelf": true,
+    "note": "Language dictionaries, photographed by the user. Big single-word spines.",
+    "expect": ["TEACH YOURSELF", "LAROUSSE", "THE STORY OF FRENCH", "STREET FRENCH", "RUSSIAN VERBS", "LEARNING RUSSIAN", "CZECH"]
+  },
+  {
+    "file": "shelf-bookstore-1.jpg",
+    "shelf": true,
+    "note": "Bookstore shelf, photographed by the user.",
+    "expect": ["BREAKING THE CODE", "REDBIRDS", "TONY HANCOCK", "THE GOLDEN STRING", "JO BRAND"]
+  },
+  {
+    "file": "shelf-bookstore-2.jpg",
+    "shelf": true,
+    "note": "Next row down on the same case.",
+    "expect": ["THE HOFFA WARS", "SEABISCUIT", "DAVID JASON", "CAINE", "POTTER"]
+  }
+]

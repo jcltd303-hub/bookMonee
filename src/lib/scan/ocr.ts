@@ -141,11 +141,14 @@ export async function releaseOcr(): Promise<void> {
  * and so declined to upscale exactly when it was needed.
  */
 export function prepareCrop(source: Rgba, box: CropRect, rotation: 0 | 90 | 180 | 270): Rgba | null {
-  // 2x measured best against 1x and 3x on real spines. Clamped so the long side stays
-  // inside the engine's memory budget: a 1400px spine at a flat 2x becomes a 2800px
-  // strip, and leptonica's allocations fail on those.
+  // 3x, measured on the user's own shelf photographs: a flat 2x read 8 of 17 expected
+  // titles, 3x read 10 of 17, and scaling only the narrow spines scored 9. It costs
+  // roughly 3s a spine against 1.3s, which is why reads stream in one at a time.
+  // The cap keeps the long side inside the engine's memory budget — leptonica's
+  // allocations fail on 2800px strips — so wide spines scale less automatically.
+  const targetScale = 3;
   const longSide = Math.max(box.w, box.h);
-  const scale = Math.min(2, Math.max(0.5, MAX_CROP_PX / Math.max(1, longSide)));
+  const scale = Math.min(targetScale, Math.max(0.5, MAX_CROP_PX / Math.max(1, longSide)));
   const crop = cropRotateScale(source, box, rotation, scale);
   return crop ? contrastStretch(crop) : null;
 }
