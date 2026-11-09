@@ -89,11 +89,29 @@ npm run bench -- --segment         # also report spine segmentation per file
 image should be *rejected*. Replace the synthetic samples with photographs of a real
 shelf — that is the point of the harness.
 
-Current baseline, gate on: 5/5 labelled spines exact, 0/3 noise images accepted,
-about 260 ms per spine. With `--no-gate`: same reads, but one noise image is accepted
-as a book (`4 hN` at 49% confidence) — which is exactly the failure the gate exists to
-stop, since Tesseract's confidence measures its own segmentation, not whether the
-output is language.
+`--dump` writes every prepared crop to `.bench/dump/`, so a bad read can be looked at
+instead of guessed at. That flag is how the real-photo problem below was diagnosed.
+
+### Baselines
+
+| Fixtures | Reads | Noise accepted | Time |
+| --- | --- | --- | --- |
+| 5 synthetic spines | 5/5 exact | 0/3 | ~260 ms |
+| 6 real photographs | 0/6 | 0/3 | ~470 ms |
+
+With `--no-gate` the synthetic set is unchanged but one noise image is accepted as a
+book (`4 hN` at 49% confidence) — the failure the gate exists to stop, since Tesseract
+confidence measures its own segmentation, not whether the output is language.
+
+The real-photo number is the honest state of the scan path: **spines from actual
+shelves do not read yet.** The `--dump` crops show why it is not a cropping problem —
+they are legible to a human, `GARDEN PARK COMMUNITY FARM` plain as day — while the
+engine returns `HARTER FARR CUMMUNITY FARM`. Three causes are known, in order of
+suspicion: the crops are 25:1 strips with several partial lines of neighbouring text;
+the type is 14–20px tall and the upscale is suppressed by non-text ink in the crop
+(see the note in `prepareCrop`); and Tesseract's layout analysis is poor on strips
+that shape. Building the bench is what turned that from a guess into a measurement;
+fixing it is the next piece of work, and the fixtures are here to measure against.
 
 ## Layout
 

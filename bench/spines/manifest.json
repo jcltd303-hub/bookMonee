@@ -30,5 +30,35 @@
  {
   "file": "noise-stripes.png",
   "expect": ""
+ },
+ {
+  "file": "real-bookstore-garden-park.png",
+  "expect": "GARDEN PARK COMMUNITY FARM",
+  "note": "clean white spine, vertical text"
+ },
+ {
+  "file": "real-bookstore-american-decoration.png",
+  "expect": "AMERICAN DECORATION",
+  "note": "long thin serif, neighbouring spine on the right edge"
+ },
+ {
+  "file": "real-bookstore-towards-new-architecture.png",
+  "expect": "TOWARDS A NEW ARCHITECTURE",
+  "note": "23px wide spine, author line above the title"
+ },
+ {
+  "file": "real-bookstore-houses-of-maine.png",
+  "expect": "Houses of Maine",
+  "note": "dark photographic spine, low contrast"
+ },
+ {
+  "file": "real-law-electoral-law-nigeria.png",
+  "expect": "ELECTORAL LAW AND PRACTICE IN NIGERIA",
+  "note": "large glossy spine, shelf label sticker at the foot"
+ },
+ {
+  "file": "real-law-fraud-free-election.png",
+  "expect": "FRAUD FREE ELECTION",
+  "note": "front cover facing camera, horizontal text \u2014 exercises the 0 degree path"
  }
 ]

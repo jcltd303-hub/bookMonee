@@ -21,11 +21,12 @@
  * a shelf gap. Those are as important as the hits: the gate is what stops garbage
  * from being priced as a book.
  */
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { createWorker } from "tesseract.js";
 import { PNG } from "pngjs";
 import {
+  prepareCrop,
   readSpineWith,
   segmentFrame,
   catalogVocabulary,
@@ -43,6 +44,9 @@ const verbose = has("verbose");
 const wantSegment = has("segment");
 /** --no-gate reproduces the old confidence-only behaviour, to show what the gate catches. */
 const gateOn = !has("no-gate");
+/** --dump writes every prepared crop, so a bad read can be looked at rather than guessed at. */
+const wantDump = has("dump");
+if (wantDump) mkdirSync(".bench/dump", { recursive: true });
 
 const manifestPath = join(dir, "manifest.json");
 if (!existsSync(manifestPath)) {
@@ -72,14 +76,20 @@ const normalise = (text) =>
     .replace(/\s+/g, " ")
     .trim();
 
-/** Token overlap, so "CAMPREI RIOI OGY" scores as a partial rather than a hit. */
-const similarity = (a, b) => {
-  const left = new Set(normalise(a).split(" ").filter(Boolean));
-  const right = new Set(normalise(b).split(" ").filter(Boolean));
-  if (!left.size || !right.size) return 0;
+/**
+ * Recall over the expected title, not overlap over the union.
+ *
+ * A correct read with an author line and a shelf sticker attached is a success —
+ * "AMERICAN DECORATION THOMAS JAYNE n i n" did read the title. Penalising the extra
+ * tokens measures noise, not accuracy, and hides real wins.
+ */
+const similarity = (got, expect) => {
+  const want = new Set(normalise(expect).split(" ").filter(Boolean));
+  const have = new Set(normalise(got).split(" ").filter(Boolean));
+  if (!want.size) return 0;
   let shared = 0;
-  for (const token of left) if (right.has(token)) shared += 1;
-  return shared / Math.max(left.size, right.size);
+  for (const token of want) if (have.has(token)) shared += 1;
+  return shared / want.size;
 };
 
 const rows = [];
@@ -98,6 +108,16 @@ for (const entry of manifest) {
     height: png.height,
   };
   const box = { x: 0, y: 0, w: png.width, h: png.height };
+
+  if (wantDump) {
+    for (const rotation of [90, 270, 0]) {
+      const crop = prepareCrop(source, box, rotation);
+      if (!crop) continue;
+      const pngOut = new PNG({ width: crop.width, height: crop.height });
+      pngOut.data = Buffer.from(crop.data);
+      writeFileSync(`.bench/dump/${entry.file.replace(/\.png$/, "")}-rot${rotation}.png`, PNG.sync.write(pngOut));
+    }
+  }
 
   const started = Date.now();
   const read = await readSpineWith(source, box, recognize, catalogVocabulary, { gate: gateOn });

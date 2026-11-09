@@ -1,4 +1,4 @@
-import { binarise, cropRotateScale, type CropRect, type Rgba } from "@/lib/scan/pixels";
+import { binarise, cropRotateScale, inkBandHeight, type CropRect, type Rgba } from "@/lib/scan/pixels";
 import { assess, type Plausibility } from "@/lib/scan/plausibility";
 import type { SpineBox } from "@/lib/scan/spines";
 
@@ -104,11 +104,31 @@ export async function releaseOcr(): Promise<void> {
   }
 }
 
-/** The prepared crop for one spine and one rotation: scaled, rotated, binarised. */
+/**
+ * The prepared crop for one spine and one rotation: rotated, scaled, binarised.
+ *
+ * Two passes. The first renders at 1x to measure how tall the ink actually is —
+ * spine width says nothing about type size, and on a real shelf a 170px spine can
+ * carry 30px letters. The second pass rescales so the cap height lands where the
+ * engine wants it.
+ *
+ * Known limitation, measured on real photographs: `inkBandHeight` takes the full
+ * span of ink rows, so anything else dark in the crop — a neighbouring spine, a
+ * shelf-label sticker, a shadow — inflates the measurement and suppresses the
+ * upscale. A 32px-tall crop of 14px type stayed at 1x for that reason. The fix is a
+ * robust line-height estimate (median ink-run length, or the tallest component)
+ * rather than the span; the bench's --dump flag exists to check that change.
+ */
 export function prepareCrop(source: Rgba, box: CropRect, rotation: 0 | 90 | 180 | 270): Rgba | null {
-  const scale = Math.min(5, Math.max(1, TARGET_CAP_HEIGHT / Math.max(6, box.w)));
-  const crop = cropRotateScale(source, box, rotation, scale);
-  return crop ? binarise(crop) : null;
+  const probe = cropRotateScale(source, box, rotation, 1);
+  if (!probe) return null;
+  const measured = binarise(probe);
+  const band = inkBandHeight(measured);
+  if (band < 4) return measured;
+  const scale = Math.min(6, Math.max(0.5, TARGET_CAP_HEIGHT / band));
+  if (Math.abs(scale - 1) < 0.12) return measured;
+  const scaled = cropRotateScale(source, box, rotation, scale);
+  return scaled ? binarise(scaled) : measured;
 }
 
 function collapse(text: string): string {
