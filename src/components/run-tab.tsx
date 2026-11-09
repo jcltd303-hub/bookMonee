@@ -109,6 +109,16 @@ export function RunTab() {
             {section ? `${section.name} · ${pool.length} boxes · ${section.denver ? "inside the city" : "outside the city and county line"}` : `All of Denver · ${pool.length} boxes`}
             {" · "}tap the map to move the start, tap a pin to open it.
           </p>
+          {section ? (
+            <div className="grid gap-1 text-xs text-muted">
+              <p>{section.blurb}</p>
+              {section.featured.length ? (
+                <p>
+                  <span className="font-semibold text-fg">Anchors:</span> {section.featured.join(" · ")}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </section>
 

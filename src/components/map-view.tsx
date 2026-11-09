@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { mapConfig } from "@/lib/map-config";
 import type { LatLng, PlannedLeg, Stop } from "@/lib/types";
 import "leaflet/dist/leaflet.css";
 
@@ -33,10 +34,11 @@ export function MapView(props: Props) {
     void import("leaflet").then((L) => {
       if (dead || mapRef.current) return;
       const map = L.map(el, { zoomControl: true }).setView([props.start.lat, props.start.lon], 13);
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-        attribution: "&copy; OpenStreetMap &copy; CARTO",
-        subdomains: "abcd",
-        maxZoom: 19,
+      const tiles = mapConfig();
+      L.tileLayer(tiles.url, {
+        attribution: tiles.attribution,
+        subdomains: tiles.subdomains || undefined,
+        maxZoom: tiles.maxZoom,
       }).addTo(map);
       map.on("click", (event) => {
         handlers.current.onStart({ lat: event.latlng.lat, lon: event.latlng.lng });

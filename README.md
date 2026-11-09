@@ -156,6 +156,24 @@ so what is left is not tuning: it needs a recogniser that handles stylised type 
 than Tesseract's stock English model, or a scene-text model trained on spines. The
 fixtures and `--dump` are here to measure whatever replaces it.
 
+## Environment
+
+The map's tiles are the one thing that comes from someone else's server, so they are
+configuration, not a constant. With nothing set, the build uses CARTO's dark basemap,
+which needs no key.
+
+Set these in the Vercel project (Settings → Environment Variables), or in a local
+`.env` — see `.env.example`:
+
+| Variable | Purpose |
+| --- | --- |
+| `VITE_MAP_TILES_URL` | full tile template, e.g. `https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png` |
+| `VITE_MAP_ATTRIBUTION` | the credit line that must go with those tiles |
+| `VITE_MAP_MAX_ZOOM` | defaults to 19 |
+| `VITE_MAPTILER_KEY` | convenience: builds a MapTiler streets URL when no template is set |
+
+`src/lib/map-config.ts` resolves these once; `MapView` never hardcodes a provider.
+
 ## Tests
 
 `npm run test:logic` bundles the pure logic and runs it under `node --test`: ISBN
