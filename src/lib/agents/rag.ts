@@ -15,6 +15,9 @@ const docs = books.books.map((book) => ({
   tokens: tokenize(`${book.title} ${book.author} ${book.subject} ${book.lane}`),
 }));
 
+/** Every token in the demand catalog — used as the known-word set for OCR gating. */
+export const catalogVocabulary: Set<string> = new Set(docs.flatMap((doc) => doc.tokens));
+
 const df = new Map<string, number>();
 for (const doc of docs) {
   for (const token of new Set(doc.tokens)) df.set(token, (df.get(token) ?? 0) + 1);

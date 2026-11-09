@@ -1,0 +1,34 @@
+[
+ {
+  "file": "organic-chemistry.png",
+  "expect": "ORGANIC CHEMISTRY"
+ },
+ {
+  "file": "campbell-biology.png",
+  "expect": "CAMPBELL BIOLOGY"
+ },
+ {
+  "file": "hunger-games.png",
+  "expect": "THE HUNGER GAMES"
+ },
+ {
+  "file": "pride-prejudice.png",
+  "expect": "PRIDE AND PREJUDICE"
+ },
+ {
+  "file": "sideways.png",
+  "expect": "GRAY'S ANATOMY"
+ },
+ {
+  "file": "angled.png",
+  "expect": ""
+ },
+ {
+  "file": "noise-flat.png",
+  "expect": ""
+ },
+ {
+  "file": "noise-stripes.png",
+  "expect": ""
+ }
+]

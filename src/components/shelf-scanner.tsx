@@ -3,9 +3,10 @@ import { BookOpen, Camera, Check, Loader2, X } from "lucide-react";
 import { judgeShelf } from "@/lib/agents/decide";
 import { quotesFor } from "@/lib/market/quote";
 import { quoteBookFromPick, stagedUsd } from "@/lib/market/from-judgement";
-import { readShelf, releaseOcr, type OcrProgress, type SpineRead } from "@/lib/scan/ocr";
+import { imageDataToRgba, readShelf, releaseOcr, type OcrProgress, type SpineRead } from "@/lib/scan/ocr";
 import { resolveSpine, type SpineGuess } from "@/lib/scan/resolve";
 import { segmentFrame, type SpineBox } from "@/lib/scan/spines";
+import { catalogVocabulary } from "@/lib/agents/rag";
 import { blurCue, sharpnessOf, watchSharpness, type Sharpness } from "@/lib/scan/blur";
 import { toIsbn13 } from "@/lib/geo";
 import { useRun } from "@/lib/store";
@@ -181,7 +182,8 @@ export function ShelfScanner({ onVerify }: { onVerify: () => void }) {
       }));
 
       setProgress({ stage: "loading", progress: 0, detail: "starting the OCR engine" });
-      const reads = await readShelf(capture, scaled, setProgress, 6);
+      const fullFrame = ctx.getImageData(0, 0, capture.width, capture.height);
+      const reads = await readShelf(imageDataToRgba(fullFrame), scaled, setProgress, 6, catalogVocabulary);
       if (!reads.length) {
         setError("Read the frames but no text came back. Try a brighter angle or a steadier hand.");
         setBusy(false);

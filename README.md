@@ -71,6 +71,30 @@ Node 22 or newer (`@tanstack/react-start` requires `>=22.12.0`, pinned in
 (the OCR engine's worker, WASM core and English model, about 11 MB) and is not
 committed.
 
+## Measuring the OCR
+
+The scan path is the one part that cannot be checked by reading code — it depends on
+how real spines look. `npm run bench` runs the production pipeline (crop, rotate,
+binarise, plausibility gate) over labelled images in Node, with the same Tesseract
+model the app ships. No browser, about a second for a shelf.
+
+```
+npm run bench                      # bench/spines, from manifest.json
+npm run bench -- --no-gate         # same, with the plausibility gate disabled
+npm run bench -- --dir ~/spines --verbose
+npm run bench -- --segment         # also report spine segmentation per file
+```
+
+`bench/spines/manifest.json` pairs each file with the text you expect; `""` means the
+image should be *rejected*. Replace the synthetic samples with photographs of a real
+shelf — that is the point of the harness.
+
+Current baseline, gate on: 5/5 labelled spines exact, 0/3 noise images accepted,
+about 260 ms per spine. With `--no-gate`: same reads, but one noise image is accepted
+as a book (`4 hN` at 49% confidence) — which is exactly the failure the gate exists to
+stop, since Tesseract's confidence measures its own segmentation, not whether the
+output is language.
+
 ## Layout
 
 ```
