@@ -195,13 +195,8 @@ Set these in the Vercel project (Settings → Environment Variables), or in a lo
 | `VITE_MAP_MAX_ZOOM` | defaults to 19 |
 | `VITE_MAPTILER_KEY` | convenience: builds a MapTiler streets URL when no template is set |
 
-And for spine detection, server-side:
-
-| Variable | Purpose |
-| --- | --- |
-| `ROBOFLOW_API_KEY` | enables the trained detector; unset means the local segmenter |
-| `ROBOFLOW_MODEL` | model id, default `open-shelves/1` |
-| `ROBOFLOW_CONFIDENCE` | minimum confidence, default `0.4` |
+Spine detection needs no environment at all: install the model at build time with
+`npm run fetch:model` (see above), or ship without one and the segmenter is used.
 
 `src/lib/map-config.ts` resolves these once; `MapView` never hardcodes a provider.
 
@@ -236,17 +231,25 @@ shows prior, current rate and observation count per desk with a reset button.
 
 Two ways to find the books, in order:
 
-1. **A trained detector**, when `ROBOFLOW_API_KEY` is set. `server/routes/api/spines.post.ts`
-   forwards one downscaled frame to a Roboflow Universe bookshelf model (default
-   `open-shelves/1`) and returns boxes as fractions of the frame, so the key stays
-   server-side and the client maps them onto whatever resolution it captured.
+1. **A local model**, when one is installed. `src/lib/scan/detect.ts` runs a YOLO-family
+   detector exported to ONNX through ONNX Runtime Web (MIT) — on the device, no API key,
+   no cloud call, no per-request cost. The file is `public/models/spines.onnx`, which is
+   gitignored; install one with `npm run fetch:model -- ./best.onnx` or
+   `SPINE_MODEL_URL=… npm run fetch:model`. Any export works:
+   `yolo export model=best.pt format=onnx imgsz=640`.
 2. **The local segmenter** (`src/lib/scan/spines.ts`) otherwise: column gradients, peaks,
-   a tall-and-narrow prior. No network, no model, and the reason three spines in the
+   a tall-and-narrow prior. No model, no network, and the reason three spines in the
    benchmark are never read — it merges books that touch.
 
-Detection fails soft: no key, a timeout or a bad response all fall back to the segmenter,
-and a deployment that answers 501 is asked once, not on every read. The scanner shows
-which detector produced the boxes, so a surprising result can be traced.
+The model is optional by design: a `HEAD` request checks for it first, so the ~1.5 MB of
+WASM is never downloaded by a deployment that has no model, and the runtime is imported
+lazily. Any failure — missing file, bad tensor, unsupported op — falls back to the
+segmenter. The scanner shows which detector produced the boxes.
+
+Licences worth knowing before shipping weights: the open-shelves dataset is
+**CC BY-NC-SA 4.0** (non-commercial, share-alike), and Ultralytics' ONNX exporter is
+**AGPL-3.0**. The app code around it is unaffected; the weights you choose carry their own
+terms.
 
 ## Shelf matching
 

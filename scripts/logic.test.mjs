@@ -14,7 +14,10 @@ import assert from "node:assert/strict";
 import {
   assess,
   assignTitles,
-  boxesFromFractions,
+  decodeYolo,
+  nonMaxSuppression,
+  toFrameBoxes,
+  unletterbox,
   decodeEntities,
   extractIsbn,
   sameBook,
@@ -92,19 +95,59 @@ test("a read with nothing above the floor still keeps its best guess", () => {
   assert.equal(assigned[0].title, "Something");
 });
 
-test("detector boxes map from fractions onto the captured frame", () => {
-  const boxes = boxesFromFractions(
-    [
-      { x: 0.1, y: 0.2, w: 0.05, h: 0.5, score: 0.91 },
-      { x: 0.0, y: 0.0, w: 0.001, h: 0.5, score: 0.99 }, // degenerate width
-      { x: 0.9, y: 0.2, w: 0.4, h: 0.5, score: 0.8 }, // runs off the frame
-    ],
-    1000,
-    400,
+test("YOLO output decodes in both layouts", () => {
+  // Two anchors, one class: [cx, cy, w, h, score]. Transposed layout is what most
+  // exporters emit — 5 rows by 2 anchors, column-major over anchors.
+  const transposed = new Float32Array([
+    100, 200, // cx
+    150, 200, // cy
+    40, 40, // w
+    300, 300, // h
+    0.9, 0.2, // score
+  ]);
+  const a = decodeYolo(transposed, [5, 2], { transposed: true, minScore: 0.35 });
+  assert.equal(a.length, 1, "the low-score anchor is dropped");
+  assert.deepEqual({ x: a[0].x, y: a[0].y, w: a[0].w, h: a[0].h }, { x: 100, y: 150, w: 40, h: 300 });
+
+  // Same two anchors, row-major: [cx, cy, w, h, score] per row.
+  const plain = new Float32Array([100, 150, 40, 300, 0.9, 150, 200, 40, 300, 0.2]);
+  const b = decodeYolo(plain, [2, 5], { transposed: false, minScore: 0.35 });
+  assert.equal(b.length, 1);
+  // Float32 in the tensor, so compare with a tolerance rather than against 0.9 exactly.
+  assert.ok(Math.abs(b[0].score - 0.9) < 1e-6, `score ${b[0].score}`);
+  assert.equal(b[0].x, 100);
+});
+
+test("overlapping detections collapse, separate ones survive", () => {
+  const boxes = [
+    { x: 100, y: 150, w: 40, h: 300, score: 0.9 },
+    { x: 102, y: 150, w: 40, h: 300, score: 0.7 }, // nearly the same spine
+    { x: 200, y: 150, w: 40, h: 300, score: 0.8 }, // its neighbour
+  ];
+  const kept = nonMaxSuppression(boxes, 0.45);
+  assert.equal(kept.length, 2);
+  assert.deepEqual(kept.map((box) => Math.round(box.x)), [100, 200]);
+});
+
+test("letterboxing is undone and boxes are clipped to the frame", () => {
+  // A 640x640 letterbox of a 1280x640 frame: scale 0.5, padded 160px top and bottom.
+  const box = { scale: 0.5, padX: 0, padY: 160 };
+  const centred = unletterbox({ x: 320, y: 320, w: 40, h: 200, score: 0.9 }, box);
+  assert.deepEqual(
+    { x: centred.x, y: centred.y, w: centred.w, h: centred.h },
+    { x: 640, y: 320, w: 80, h: 400 },
   );
-  assert.equal(boxes.length, 1, "degenerate and out-of-frame boxes are dropped");
-  assert.deepEqual({ x: boxes[0].x, y: boxes[0].y, w: boxes[0].w, h: boxes[0].h }, { x: 100, y: 80, w: 50, h: 200 });
-  assert.equal(boxes[0].score, 0.91);
+  const clipped = toFrameBoxes(
+    [
+      { x: 10, y: 320, w: 100, h: 400, score: 0.9 }, // runs off the left edge
+      { x: 320, y: 320, w: 2, h: 200, score: 0.9 }, // too thin to be a spine (4px in the frame)
+    ],
+    box,
+    1280,
+    640,
+  );
+  assert.equal(clipped.length, 1, "the sliver is dropped, the edge box is kept and clipped");
+  assert.equal(clipped[0].x, 0);
 });
 
 test("the plausibility gate rejects symbol soup", () => {

@@ -1,91 +1,110 @@
+import { nonMaxSuppression, decodeYolo, toFrameBoxes, type Letterbox } from "@/lib/scan/yolo";
 import type { SpineBox } from "@/lib/scan/spines";
 
 /**
- * Trained spine detection, with the local segmenter as the fallback.
+ * On-device spine detection with a FOSS model.
  *
- * The heuristic segmenter is decent on a clean row and poor where books touch: it merges
- * neighbours, which is why three spines in the benchmark are never read at all. A
- * detector trained on bookshelves does that part properly. This calls one through the
- * deployment's own proxy, so the Roboflow key never reaches the browser.
+ * No API key, no cloud call, no per-request cost: a YOLO-family detector exported to
+ * ONNX runs in the browser through ONNX Runtime Web (MIT). The model file is the
+ * deployer's choice — any bookshelf/spine detector exported with
+ * `yolo export format=onnx` works, including one trained on the open-shelves dataset.
  *
- * Everything here fails soft: no configuration, a timeout or a bad response all return
- * null, and the caller falls back to `segmentFrame`. Scanning a shelf must not depend on
- * a third party being up.
+ * The model is optional. `public/models/spines.onnx` is gitignored, so a deployment
+ * without it simply falls back to the local segmenter; the runtime is imported lazily so
+ * the ~1.5MB of WASM is never downloaded by anyone who has no model.
  */
 export type DetectorResult = { boxes: SpineBox[]; detector: string };
 
-const MAX_SEND_WIDTH = 1100;
-const TIMEOUT_MS = 12000;
+const MODEL_URL = "/models/spines.onnx";
+const INPUT = 640;
+const MIN_SCORE = 0.35;
+const IOU = 0.45;
 
-/** Fractional boxes from the proxy, mapped onto the captured frame. */
-export function boxesFromFractions(
-  boxes: { x: number; y: number; w: number; h: number; score: number }[],
-  width: number,
-  height: number,
-): SpineBox[] {
-  const out: SpineBox[] = [];
-  for (const box of boxes) {
-    const x = Math.round(box.x * width);
-    const y = Math.round(box.y * height);
-    const w = Math.round(box.w * width);
-    const h = Math.round(box.h * height);
-    // Reject degenerate and absurd boxes rather than feeding them to OCR.
-    if (w < 8 || h < 24) continue;
-    if (x < -4 || y < -4 || x + w > width + 4 || y + h > height + 4) continue;
-    out.push({
-      x: Math.max(0, x),
-      y: Math.max(0, y),
-      w: Math.min(w, width - Math.max(0, x)),
-      h: Math.min(h, height - Math.max(0, y)),
-      score: Math.round(box.score * 1000) / 1000,
-    });
-  }
-  return out.sort((a, b) => b.score - a.score);
-}
+type Ort = typeof import("onnxruntime-web");
+type Session = Awaited<ReturnType<Ort["InferenceSession"]["create"]>>;
 
-/** Encode a frame small enough to upload. */
-function encode(canvas: HTMLCanvasElement): string | null {
-  const scale = Math.min(1, MAX_SEND_WIDTH / Math.max(1, canvas.width));
-  const target = document.createElement("canvas");
-  target.width = Math.round(canvas.width * scale);
-  target.height = Math.round(canvas.height * scale);
-  const ctx = target.getContext("2d");
-  if (!ctx) return null;
-  ctx.drawImage(canvas, 0, 0, target.width, target.height);
-  return target.toDataURL("image/jpeg", 0.85);
-}
+let sessionPromise: Promise<Session | null> | null = null;
+/** Set once the deployment proves it has no model, so we stop asking. */
+let unavailable = false;
 
-/** Once the deployment says it has no detector, stop asking on every read. */
-let detectorDisabled = false;
-
-export async function detectSpines(canvas: HTMLCanvasElement): Promise<DetectorResult | null> {
-  if (detectorDisabled) return null;
-  const image = encode(canvas);
-  if (!image) return null;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-  try {
-    const response = await fetch("/api/spines", {
-      method: "POST",
-      signal: controller.signal,
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ image }),
-    });
-    if (!response.ok) {
-      if (response.status === 501) detectorDisabled = true;
+async function loadSession(): Promise<Session | null> {
+  if (unavailable) return null;
+  if (sessionPromise) return sessionPromise;
+  sessionPromise = (async () => {
+    try {
+      // Cheap existence check first: a 404 here avoids pulling 1.5MB of WASM.
+      const head = await fetch(MODEL_URL, { method: "HEAD" });
+      if (!head.ok) {
+        unavailable = true;
+        return null;
+      }
+      const ort = await import("onnxruntime-web");
+      ort.env.wasm.numThreads = 1;
+      return await ort.InferenceSession.create(MODEL_URL, { executionProviders: ["wasm"] });
+    } catch {
+      unavailable = true;
       return null;
     }
-    const payload = (await response.json()) as {
-      boxes?: { x: number; y: number; w: number; h: number; score: number }[];
-      detector?: string;
-    };
-    if (!Array.isArray(payload.boxes) || !payload.boxes.length) return null;
-    const boxes = boxesFromFractions(payload.boxes, canvas.width, canvas.height);
+  })();
+  return sessionPromise;
+}
+
+/** Letterbox the frame into the model's square input, keeping aspect ratio. */
+function letterbox(canvas: HTMLCanvasElement): { tensor: Float32Array; box: Letterbox } {
+  const scale = Math.min(INPUT / canvas.width, INPUT / canvas.height);
+  const w = Math.round(canvas.width * scale);
+  const h = Math.round(canvas.height * scale);
+  const padX = Math.round((INPUT - w) / 2);
+  const padY = Math.round((INPUT - h) / 2);
+
+  const target = document.createElement("canvas");
+  target.width = INPUT;
+  target.height = INPUT;
+  const ctx = target.getContext("2d");
+  if (!ctx) return { tensor: new Float32Array(3 * INPUT * INPUT), box: { scale, padX, padY } };
+  ctx.fillStyle = "#727272";
+  ctx.fillRect(0, 0, INPUT, INPUT);
+  ctx.drawImage(canvas, padX, padY, w, h);
+
+  const pixels = ctx.getImageData(0, 0, INPUT, INPUT).data;
+  const tensor = new Float32Array(3 * INPUT * INPUT);
+  const plane = INPUT * INPUT;
+  for (let i = 0, p = 0; i < pixels.length; i += 4, p += 1) {
+    tensor[p] = pixels[i] / 255;
+    tensor[plane + p] = pixels[i + 1] / 255;
+    tensor[2 * plane + p] = pixels[i + 2] / 255;
+  }
+  return { tensor, box: { scale, padX, padY } };
+}
+
+export async function detectSpines(canvas: HTMLCanvasElement): Promise<DetectorResult | null> {
+  const session = await loadSession();
+  if (!session) return null;
+  try {
+    const ort = await import("onnxruntime-web");
+    const { tensor, box } = letterbox(canvas);
+    const input = new ort.Tensor("float32", tensor, [1, 3, INPUT, INPUT]);
+    const name = session.inputNames[0];
+    const outputs = await session.run({ [name]: input });
+    const first = outputs[session.outputNames[0]];
+    const dims = first.dims as number[];
+    const data = first.data as Float32Array;
+
+    // [1, 4+classes, anchors] is the transposed layout most exporters emit;
+    // [1, anchors, 4+classes] is the other. Decide from which axis is 4+classes.
+    let raw;
+    if (dims.length === 3) {
+      const [, a, b] = dims;
+      const transposed = a < b;
+      raw = decodeYolo(data, transposed ? [a, b] : [a, b], { transposed, minScore: MIN_SCORE });
+    } else {
+      raw = decodeYolo(data, [dims[1] ?? 0, dims[2] ?? 0], { transposed: true, minScore: MIN_SCORE });
+    }
+
+    const boxes = toFrameBoxes(nonMaxSuppression(raw, IOU), box, canvas.width, canvas.height);
     if (!boxes.length) return null;
-    return { boxes, detector: payload.detector ?? "roboflow" };
+    return { boxes: boxes.sort((x, y) => y.score - x.score), detector: "onnx" };
   } catch {
     return null;
-  } finally {
-    clearTimeout(timer);
   }
 }
