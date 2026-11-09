@@ -10,7 +10,7 @@ export default defineConfig({
     ssr: true,
     minify: false,
     emptyOutDir: true,
-    outDir: here("../.bench"),
+    outDir: here("../.bench-test"),
     rollupOptions: {
       input: here("./test-entry.ts"),
       external: ["tesseract.js"],

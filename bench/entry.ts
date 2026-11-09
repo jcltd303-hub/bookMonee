@@ -5,7 +5,7 @@
  * rotate, binarise, gate and segment code the browser runs. Nothing here is a copy.
  */
 export { prepareCrop, readSpineWith, type Recognizer, type SpineRead } from "@/lib/scan/ocr";
-export { binarise, cropRotateScale, greyFrom, inkBandHeight } from "@/lib/scan/pixels";
+export { binarise, contrastStretch, cropRotateScale, greyFrom, otsuThreshold } from "@/lib/scan/pixels";
 export { segmentFrame, spineBoxes, toGrey } from "@/lib/scan/spines";
 export { assess } from "@/lib/scan/plausibility";
 export { catalogVocabulary } from "@/lib/agents/rag";

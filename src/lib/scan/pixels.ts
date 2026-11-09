@@ -98,7 +98,9 @@ export function cropRotateScale(
   const quarter = rotation === 90 || rotation === 270;
   const outW = Math.round((quarter ? cropH : cropW) * scale);
   const outH = Math.round((quarter ? cropW : cropH) * scale);
-  if (outW < 4 || outH < 4 || outW > 4096 || outH > 4096) return null;
+  // Cap the long side: the WASM engine's leptonica allocations fail on very large
+  // images, and a 2800px-wide strip buys nothing over 2000px.
+  if (outW < 4 || outH < 4 || outW > 2400 || outH > 2400) return null;
 
   const data = new Uint8ClampedArray(outW * outH * 4);
   for (let y = 0; y < outH; y += 1) {
@@ -135,28 +137,6 @@ export function cropRotateScale(
   return { data, width: outW, height: outH };
 }
 
-/**
- * Height of the ink band in a binarised crop.
- *
- * This is the measurement the upscaling needs: on a real shelf the type is much
- * smaller than the spine is wide, so keying the scale to spine width leaves wide
- * spines at 1x with tiny text. The ink band is the actual cap height.
- */
-export function inkBandHeight(image: Rgba): number {
-  let first = -1;
-  let last = -1;
-  for (let y = 0; y < image.height; y += 1) {
-    let ink = 0;
-    for (let x = 0; x < image.width; x += 1) {
-      if (image.data[(y * image.width + x) * 4] < 128) ink += 1;
-    }
-    if (ink / image.width > 0.02) {
-      if (first < 0) first = y;
-      last = y;
-    }
-  }
-  return first < 0 ? 0 : last - first + 1;
-}
 
 /**
  * Greyscale with the histogram stretched between the 5th and 95th percentile.

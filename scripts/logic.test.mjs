@@ -27,7 +27,7 @@ import {
   runEpisode,
   mulberry32,
   buyers,
-} from "../.bench/logic.mjs";
+} from "../.bench-test/logic.mjs";
 
 test("ISBN-13 check digit is enforced, not just the shape", () => {
   assert.equal(toIsbn13("9781119659587"), "9781119659587");

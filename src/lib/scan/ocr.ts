@@ -46,6 +46,8 @@ const ASSET_BASE = "/tesseract";
 const MIN_CONFIDENCE = 30;
 /** Vertical first: a spine in a shelf frame is the normal case. 0° is the fallback. */
 const ROTATIONS: (0 | 90 | 270)[] = [90, 270, 0];
+/** Longest side of a prepared crop. Beyond this the WASM engine runs out of memory. */
+const MAX_CROP_PX = 2400;
 /** Tesseract's "uniform block" mode: a crop is one line of spine text, not a page. */
 const PAGE_SEG_MODE = "6";
 
@@ -120,8 +122,11 @@ export async function releaseOcr(): Promise<void> {
  * and so declined to upscale exactly when it was needed.
  */
 export function prepareCrop(source: Rgba, box: CropRect, rotation: 0 | 90 | 180 | 270): Rgba | null {
-  const shortSide = Math.min(box.w, box.h);
-  const scale = shortSide < 120 ? 2 : 1;
+  // 2x measured best against 1x and 3x on real spines. Clamped so the long side stays
+  // inside the engine's memory budget: a 1400px spine at a flat 2x becomes a 2800px
+  // strip, and leptonica's allocations fail on those.
+  const longSide = Math.max(box.w, box.h);
+  const scale = Math.min(2, Math.max(0.5, MAX_CROP_PX / Math.max(1, longSide)));
   const crop = cropRotateScale(source, box, rotation, scale);
   return crop ? contrastStretch(crop) : null;
 }
