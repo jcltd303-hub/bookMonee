@@ -97,21 +97,41 @@ instead of guessed at. That flag is how the real-photo problem below was diagnos
 
 ### Baselines
 
-| Fixtures | Reads | Noise accepted | Time |
+| Fixtures | Result | Noise accepted | Time |
 | --- | --- | --- | --- |
 | 5 synthetic spines | 5/5 exact | 0/3 | ~1.3 s |
-| 6 real photographs | 2/6 | 0/3 | ~1.3 s |
+| 6 real spine photographs | 7/11 labelled (5 exact, 2 partial) | 0/3 | ~2.7 s |
+| 3 real shelf rows, whole rows with segmentation | 13/17 titles, 24–31 spines a row | — | ~2.7 s a spine |
 
-With `--no-gate` the reads are identical but one noise image is accepted — the gate
-costs nothing in accuracy and blocks a false accept.
+With `--no-gate` the reads are identical but one noise image is accepted — the gate costs
+nothing in accuracy and blocks a false accept.
 
-The real fixtures are cut from 3264×2448 and 3840×2161 originals at about 1400 px tall,
-so a spine is 56–335 px wide with 20–40 px type — roughly what a phone at 1920×1080 sees
-when it is close to a shelf. An earlier set downscaled to 800 px tall had 10 px type,
-which is harsher than reality and made the numbers look worse than the app will be.
+The spine fixtures are cut from 3264×2448 and 3840×2161 originals at about 1400 px tall, so
+a spine is 56–335 px wide with 20–40 px type. The shelf rows are cut from photographs of a
+real book case, between the shelf boards, with the expected titles labelled by reading them
+— they score the whole path, segmentation included.
 
-Getting from 0/6 to 2/6 took a grid search over preprocessing, scale, page-segmentation
-mode and crop insets, scored on these six photographs. What helped:
+What the shelf rows changed, each measured:
+
+| Change | Result |
+| --- | --- |
+| Gate: only alphabetic single letters count as noise | `DAVID JASON: 3 4` stopped being rejected |
+| Gate: four-letter floor instead of six | recovered `CAINE`, `DUNE`, `POTTER`-length titles |
+| Ranking leads with known words, not plausibility score | stopped a garbage read winning the rotation contest |
+| 3× upscale instead of 2× | 10/17 → 13/17 titles |
+| Minimum edge spacing 0.016 instead of 0.02 | same titles, 24–31 spines a row instead of 21–22 |
+
+Together: 10/17 → 13/17 titles, noise still 0/3. Three titles are still never read at all
+(`TEACH YOURSELF`, `LAROUSSE`, `POTTER`); the dump shows them inside boxes spanning several
+spines, which is a resolution problem the correction tap covers rather than a gate problem.
+
+Two segmentation attempts failed and were reverted: scoring edge consistency down a column
+(10/17 — it fires on text strokes too), and halving the edge spacing to 0.011 (36 boxes a
+row but spines cut in half, so `CAINE` reads as `CAI` + `NE`, 10/17). Over-segmentation
+costs more titles than merging does.
+
+Getting the real-photo numbers off zero took a grid search over preprocessing, scale,
+page-segmentation mode and crop insets. What helped:
 
 | Change | Why |
 | --- | --- |
