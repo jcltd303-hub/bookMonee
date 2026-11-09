@@ -55,17 +55,24 @@ if (!existsSync(manifestPath)) {
 }
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 
-const worker = await createWorker("eng", 1, {
-  langPath: "node_modules/@tesseract.js-data/eng/4.0.0_best_int",
-  gzip: true,
-  cacheMethod: "none",
-});
+/** How many engines to run at once — the app runs two. */
+const workers = Math.max(1, Math.min(4, Number(flag("workers", "1")) || 1));
+const engines = [];
+for (let i = 0; i < workers; i += 1) {
+  engines.push(
+    await createWorker("eng", 1, {
+      langPath: "node_modules/@tesseract.js-data/eng/4.0.0_best_int",
+      gzip: true,
+      cacheMethod: "none",
+    }),
+  );
+}
 
 /** The production pipeline takes an RGBA buffer; the engine takes an encoded image. */
-const recognize = async (image) => {
+const makeRecognize = (engine) => async (image) => {
   const png = new PNG({ width: image.width, height: image.height });
   png.data = Buffer.from(image.data);
-  const { data } = await worker.recognize(PNG.sync.write(png));
+  const { data } = await engine.recognize(PNG.sync.write(png));
   return { text: data.text ?? "", confidence: data.confidence ?? 0 };
 };
 
@@ -94,12 +101,23 @@ const similarity = (got, expect) => {
 
 const rows = [];
 let totalMs = 0;
+const startedAll = Date.now();
+let cursor = 0;
 
-for (const entry of manifest) {
+const runQueue = async (engine) => {
+  const recognize = makeRecognize(engine);
+  while (cursor < manifest.length) {
+    const entry = manifest[cursor];
+    cursor += 1;
+    await runOne(entry, recognize);
+  }
+};
+
+async function runOne(entry, recognize) {
   const file = join(dir, entry.file);
   if (!existsSync(file)) {
     rows.push({ file: entry.file, verdict: "missing", detail: "file not found" });
-    continue;
+    return;
   }
   const png = PNG.sync.read(readFileSync(file));
   const source = {
@@ -154,7 +172,9 @@ for (const entry of manifest) {
   }
 }
 
-await worker.terminate();
+await Promise.all(engines.map((engine) => runQueue(engine)));
+const wallMs = Date.now() - startedAll;
+await Promise.all(engines.map((engine) => engine.terminate()));
 
 const width = Math.max(...rows.map((row) => (row.file ?? "").length), 4);
 console.log("\nfile".padEnd(width + 2) + "verdict".padEnd(14) + "rot".padEnd(5) + "conf".padEnd(6) + "plaus".padEnd(7) + "read");
@@ -183,7 +203,8 @@ console.log(
   `${gateOn ? "gate on" : "gate OFF"} · read ${exact + partial}/${positives.length} labelled spines` +
     ` (exact ${exact}, partial ${partial}, rejected ${rejected})` +
     ` · ${falseAccepts}/${negatives.length} noise images accepted` +
-    ` · ${Math.round(totalMs / Math.max(1, rows.length))} ms per spine`,
+    ` · ${Math.round(totalMs / Math.max(1, rows.length))} ms per spine` +
+    ` · ${workers} worker${workers === 1 ? "" : "s"}, ${wallMs} ms wall`,
 );
 if (rejected) console.log("  rejected a labelled spine: lower the gate in src/lib/scan/plausibility.ts, or the read is genuinely bad");
 if (falseAccepts) console.log("  accepted noise: raise the gate threshold");

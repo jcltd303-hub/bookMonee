@@ -121,6 +121,17 @@ spines (3 titles at inset 0, 2 at 6%, 1 at 12%); detecting text lines and OCRing
 one separately (1 title against 3); scaling by the tallest ink run instead of a flat
 multiplier (4 of 6 rejected, and slower); and raising the source resolution on its own.
 
+### Reading speed
+
+Results stream into the shelf as each spine finishes, so the first book appears in about
+a second instead of after the whole shelf. Reading runs on a pool of engines, but the
+pool is sized from `navigator.hardwareConcurrency` rather than fixed: measured on a
+two-core machine, two workers is *worse* than one — 19.4 s against 18.4 s for the same
+fixtures, with each read taking twice as long, because the engines contend for the same
+cores. Four cores or more gets two engines; anything less gets one.
+
+`npm run bench -- --workers 2` reproduces that comparison on any machine.
+
 Tuning Tesseract is now exhausted, measured rather than assumed: a capitals-only
 character whitelist changes nothing (1 title either way), adaptive (Sauvola) thresholding
 changes nothing, and single-line mode (PSM 7) reads *zero* titles. The stock English

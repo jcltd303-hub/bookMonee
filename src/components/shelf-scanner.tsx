@@ -183,18 +183,23 @@ export function ShelfScanner({ onVerify }: { onVerify: () => void }) {
 
       setProgress({ stage: "loading", progress: 0, detail: "starting the OCR engine" });
       const fullFrame = ctx.getImageData(0, 0, capture.width, capture.height);
-      const reads = await readShelf(imageDataToRgba(fullFrame), scaled, setProgress, 6, catalogVocabulary);
+      // Each spine appears as soon as it is read, rather than after the whole shelf.
+      const reads = await readShelf(
+        imageDataToRgba(fullFrame),
+        scaled,
+        setProgress,
+        6,
+        catalogVocabulary,
+        (read) => {
+          void resolveSpine(read, { offline }).then((guesses) => {
+            if (!guesses.length) return;
+            setResults((current) => [...current, { read, guesses, taken: false }]);
+          });
+        },
+      );
       if (!reads.length) {
         setError("Read the frames but no text came back. Try a brighter angle or a steadier hand.");
-        setBusy(false);
-        return;
       }
-      const resolved: ShelfResult[] = [];
-      for (const read of reads) {
-        const guesses = await resolveSpine(read, { offline });
-        resolved.push({ read, guesses, taken: false });
-      }
-      setResults(resolved);
     } catch {
       setError("Reading failed. The first read has to download the OCR engine once — check the connection and retry.");
     } finally {
