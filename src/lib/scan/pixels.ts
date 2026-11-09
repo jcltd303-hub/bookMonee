@@ -159,6 +159,43 @@ export function inkBandHeight(image: Rgba): number {
 }
 
 /**
+ * Greyscale with the histogram stretched between the 5th and 95th percentile.
+ *
+ * This replaced hard Otsu binarisation as the OCR input. Measured on six real spine
+ * photographs across scale and page-segmentation settings, greyscale beat binarisation
+ * at every scale (3 titles read against 2). A hard threshold throws away the
+ * anti-aliased edges small type lives on, and Tesseract runs its own adaptive
+ * thresholding anyway, so feeding it a clean grey image leaves that to the engine
+ * that specialises in it.
+ */
+export function contrastStretch(image: Rgba): Rgba {
+  const grey = greyFrom(image.data);
+  const histogram = new Array(256).fill(0);
+  for (let i = 0; i < grey.length; i += 1) histogram[grey[i]] += 1;
+  const percentile = (q: number): number => {
+    let acc = 0;
+    const target = grey.length * q;
+    for (let value = 0; value < 256; value += 1) {
+      acc += histogram[value];
+      if (acc >= target) return value;
+    }
+    return 255;
+  };
+  const low = percentile(0.05);
+  const high = percentile(0.95);
+  const span = Math.max(1, high - low);
+  const data = new Uint8ClampedArray(image.data.length);
+  for (let i = 0, p = 0; i < image.data.length; i += 4, p += 1) {
+    const value = Math.max(0, Math.min(255, ((grey[p] - low) / span) * 255));
+    data[i] = value;
+    data[i + 1] = value;
+    data[i + 2] = value;
+    data[i + 3] = 255;
+  }
+  return { data, width: image.width, height: image.height };
+}
+
+/**
  * Hard black/white split at the Otsu threshold, forced to dark-text-on-light.
  *
  * Half the spines on a real shelf are white type on a coloured or photographic

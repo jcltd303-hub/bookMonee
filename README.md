@@ -96,22 +96,37 @@ instead of guessed at. That flag is how the real-photo problem below was diagnos
 
 | Fixtures | Reads | Noise accepted | Time |
 | --- | --- | --- | --- |
-| 5 synthetic spines | 5/5 exact | 0/3 | ~260 ms |
-| 6 real photographs | 0/6 | 0/3 | ~470 ms |
+| 5 synthetic spines | 5/5 exact | 0/3 | ~770 ms |
+| 6 real photographs | 1/6 | 0/3 | ~770 ms |
 
-With `--no-gate` the synthetic set is unchanged but one noise image is accepted as a
-book (`4 hN` at 49% confidence) — the failure the gate exists to stop, since Tesseract
-confidence measures its own segmentation, not whether the output is language.
+With `--no-gate` the reads are identical but one noise image is accepted — the gate
+costs nothing in accuracy and blocks a false accept, which is the whole point of it.
 
-The real-photo number is the honest state of the scan path: **spines from actual
-shelves do not read yet.** The `--dump` crops show why it is not a cropping problem —
-they are legible to a human, `GARDEN PARK COMMUNITY FARM` plain as day — while the
-engine returns `HARTER FARR CUMMUNITY FARM`. Three causes are known, in order of
-suspicion: the crops are 25:1 strips with several partial lines of neighbouring text;
-the type is 14–20px tall and the upscale is suppressed by non-text ink in the crop
-(see the note in `prepareCrop`); and Tesseract's layout analysis is poor on strips
-that shape. Building the bench is what turned that from a guess into a measurement;
-fixing it is the next piece of work, and the fixtures are here to measure against.
+Getting the real-photo number off zero took a grid search over preprocessing, scale
+and page-segmentation mode, scored on these six photographs:
+
+| Change | Why |
+| --- | --- |
+| Greyscale + contrast stretch instead of Otsu binarisation | beat binarisation at every scale (3 titles against 2): a hard threshold destroys the anti-aliased edges small type lives on, and Tesseract does its own adaptive thresholding |
+| Flat 2x upscale instead of measuring an ink band | 2x beat 1x and 3x at every setting; the ink-band measure was polluted by neighbouring spines and stickers, so it declined to upscale exactly when needed |
+| Page segmentation mode 6 (uniform block) | the default treats a 25:1 spine strip as a page layout and fragments it |
+
+Still not good enough: **one real spine in six reads.** The dumps show the crops are
+legible to a human while the engine mangles them, so the remaining work is crop
+hygiene (the segmenter's boxes include slivers of the next spine), proper line
+detection instead of assuming one line per crop, and probably a stronger recogniser
+than Tesseract for stylised type. The fixtures are here to measure that against.
+
+## Tests
+
+`npm run test:logic` bundles the pure logic and runs it under `node --test`: ISBN
+check digits, spine-text extraction, the plausibility gate, book identity, quote
+floors, the packer's never-stage-a-loss rule, determinism, and that the trading agent
+actually learns. No framework, no aliases, about a second.
+
+`npm test` is the platform's older suite and is red for reasons unrelated to this app
+(its glob does not expand, and eight workspace tests fail in this environment). Treat
+`test:logic` as the one that gates the money logic.
 
 ## Layout
 

@@ -24,7 +24,8 @@
     "test": "node --test 'scripts/**/*.test.mjs' && node --experimental-strip-types --test src/lib/app-data/app-data.test.ts src/lib/app-data/readiness-schedule.test.ts src/lib/auth/gate-identity.test.ts src/lib/auth/sign-in-gate.test.ts src/lib/preview-path-prefix.test.ts",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "bench": "vite build --config bench/vite.bench.config.mjs && node scripts/ocr-bench.mjs"
+    "bench": "vite build --config bench/vite.bench.config.mjs && node scripts/ocr-bench.mjs",
+    "test:logic": "vite build --config bench/vite.test.config.mjs && node --test scripts/logic.test.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.4",

@@ -101,7 +101,11 @@ export function assess(text: string, vocabulary?: Set<string>): Plausibility {
     0.1 * (1 - clamp(singleLetterRatio));
 
   const score = Math.round((0.75 * shape + 0.25 * clamp(knownRatio)) * 1000) / 1000;
-  const plausible = score >= 0.55 && letters >= 3 && singleLetterRatio <= 0.5;
+  // A title needs at least one real word in it. Without this, greyscale preprocessing
+  // handed back "ad a &" at 0.74 — short, letter-heavy, and not a book.
+  const longestWord = tokens.reduce((longest, token) => Math.max(longest, token.length), 0);
+  const plausible =
+    score >= 0.55 && letters >= 6 && singleLetterRatio <= 0.4 && longestWord >= 4;
 
   return {
     score,
@@ -114,15 +118,17 @@ export function assess(text: string, vocabulary?: Set<string>): Plausibility {
       ? knownRatio > 0
         ? "known words"
         : "word-shaped"
-      : letters < 3
+      : letters < 6
         ? "too little text"
-        : singleLetterRatio > 0.5
-          ? "mostly single letters"
-          : symbolRatio > 0.25
-            ? "mostly symbols"
-            : vowelScore < 0.5
-              ? "no vowel structure"
-              : "below threshold",
+        : longestWord < 4
+          ? "no word long enough"
+          : singleLetterRatio > 0.4
+            ? "mostly single letters"
+            : symbolRatio > 0.25
+              ? "mostly symbols"
+              : vowelScore < 0.5
+                ? "no vowel structure"
+                : "below threshold",
   };
 }
 

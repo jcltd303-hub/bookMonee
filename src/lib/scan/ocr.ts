@@ -1,4 +1,4 @@
-import { binarise, cropRotateScale, inkBandHeight, type CropRect, type Rgba } from "@/lib/scan/pixels";
+import { contrastStretch, cropRotateScale, type CropRect, type Rgba } from "@/lib/scan/pixels";
 import { assess, type Plausibility } from "@/lib/scan/plausibility";
 import type { SpineBox } from "@/lib/scan/spines";
 
@@ -38,6 +38,7 @@ export type SpineRead = {
 
 type OcrWorker = {
   recognize: (image: HTMLCanvasElement) => Promise<{ data: { text: string; confidence: number } }>;
+  setParameters: (params: Record<string, string>) => Promise<unknown>;
   terminate: () => Promise<unknown>;
 };
 
@@ -45,7 +46,8 @@ const ASSET_BASE = "/tesseract";
 const MIN_CONFIDENCE = 30;
 /** Vertical first: a spine in a shelf frame is the normal case. 0° is the fallback. */
 const ROTATIONS: (0 | 90 | 270)[] = [90, 270, 0];
-const TARGET_CAP_HEIGHT = 34;
+/** Tesseract's "uniform block" mode: a crop is one line of spine text, not a page. */
+const PAGE_SEG_MODE = "6";
 
 let workerPromise: Promise<OcrWorker> | null = null;
 
@@ -82,6 +84,9 @@ export async function loadOcr(onProgress?: (progress: OcrProgress) => void): Pro
         });
       },
     })) as unknown as OcrWorker;
+    // One line per crop, not a page layout: the default page-segmentation mode reads
+    // a 25:1 spine strip as a column of fragments and mangles it.
+    await worker.setParameters({ tessedit_pageseg_mode: PAGE_SEG_MODE });
     return worker;
   })();
   try {
@@ -105,30 +110,20 @@ export async function releaseOcr(): Promise<void> {
 }
 
 /**
- * The prepared crop for one spine and one rotation: rotated, scaled, binarised.
+ * The prepared crop for one spine and one rotation: rotated, upscaled, contrast
+ * stretched.
  *
- * Two passes. The first renders at 1x to measure how tall the ink actually is —
- * spine width says nothing about type size, and on a real shelf a 170px spine can
- * carry 30px letters. The second pass rescales so the cap height lands where the
- * engine wants it.
- *
- * Known limitation, measured on real photographs: `inkBandHeight` takes the full
- * span of ink rows, so anything else dark in the crop — a neighbouring spine, a
- * shelf-label sticker, a shadow — inflates the measurement and suppresses the
- * upscale. A 32px-tall crop of 14px type stayed at 1x for that reason. The fix is a
- * robust line-height estimate (median ink-run length, or the tallest component)
- * rather than the span; the bench's --dump flag exists to check that change.
+ * The scale is a flat 2x for anything small, which is what a grid search over six
+ * real spine photographs picked: 2x beat both 1x and 3x at every segmentation mode,
+ * and 3x mostly amplified sensor noise. It also sidesteps the earlier approach of
+ * measuring an ink band, which was polluted by neighbouring spines and shelf stickers
+ * and so declined to upscale exactly when it was needed.
  */
 export function prepareCrop(source: Rgba, box: CropRect, rotation: 0 | 90 | 180 | 270): Rgba | null {
-  const probe = cropRotateScale(source, box, rotation, 1);
-  if (!probe) return null;
-  const measured = binarise(probe);
-  const band = inkBandHeight(measured);
-  if (band < 4) return measured;
-  const scale = Math.min(6, Math.max(0.5, TARGET_CAP_HEIGHT / band));
-  if (Math.abs(scale - 1) < 0.12) return measured;
-  const scaled = cropRotateScale(source, box, rotation, scale);
-  return scaled ? binarise(scaled) : measured;
+  const shortSide = Math.min(box.w, box.h);
+  const scale = shortSide < 120 ? 2 : 1;
+  const crop = cropRotateScale(source, box, rotation, scale);
+  return crop ? contrastStretch(crop) : null;
 }
 
 function collapse(text: string): string {
@@ -179,8 +174,10 @@ export async function readSpineWith(
     // Gate on: believability leads. Gate off: the old confidence-times-letters rank,
     // so the benchmark's A/B compares against what the code actually did before.
     const letters = (text.match(/[A-Za-z]/g) ?? []).length;
+    // Believability carries most of the weight: on real photos the correct rotation
+    // often comes back less confident than a wrong one.
     const rank = gateOn
-      ? plausibility.score * 0.7 + (confidence / 100) * 0.3
+      ? plausibility.score * 0.85 + (confidence / 100) * 0.15
       : (confidence / 100) * Math.min(1, letters / 20);
     if (!best || rank > best.rank) best = { read, rank };
     // A strong read on the first vertical rotation is enough; skip the rest.
