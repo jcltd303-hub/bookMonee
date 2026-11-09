@@ -1,9 +1,30 @@
 import booksFile from "@/data/books.json";
 import librariesFile from "@/data/libraries.json";
+import { decodeEntities } from "@/lib/text";
 import type { BooksFile, LibrariesFile, Stop } from "@/lib/types";
 
-export const libraries = librariesFile as LibrariesFile;
-export const books = booksFile as BooksFile;
+const rawLibraries = librariesFile as LibrariesFile;
+const rawBooks = booksFile as BooksFile;
+
+/** Imported names carry HTML entities in a couple of places; decode once at load. */
+export const libraries: LibrariesFile = {
+  ...rawLibraries,
+  stops: rawLibraries.stops.map((stop) => ({
+    ...stop,
+    name: decodeEntities(stop.name),
+    address: decodeEntities(stop.address),
+    notes: decodeEntities(stop.notes),
+  })),
+};
+
+export const books: BooksFile = {
+  ...rawBooks,
+  books: rawBooks.books.map((book) => ({
+    ...book,
+    title: decodeEntities(book.title),
+    author: decodeEntities(book.author),
+  })),
+};
 
 export const bookcases: Stop[] = libraries.stops.filter((stop) => stop.profitEligible);
 export const mutualAid: Stop[] = libraries.stops.filter((stop) => !stop.profitEligible);

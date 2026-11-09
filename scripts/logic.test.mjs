@@ -13,6 +13,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   assess,
+  decodeEntities,
   extractIsbn,
   sameBook,
   supersedes,
@@ -42,6 +43,14 @@ test("spine text yields the ISBN only when it is really there", () => {
   assert.equal(extractIsbn("97807564O4741 TOR BOOKS"), "9780756404741", "O read as zero");
   assert.equal(extractIsbn("A NOVEL 2024 1234567890123 PRESS"), null);
   assert.equal(extractIsbn("SAPIENS YUVAL NOAH HARARI"), null);
+});
+
+test("imported names lose their HTML entities", () => {
+  assert.equal(decodeEntities("Nancy&apos;s book nook"), "Nancy's book nook");
+  assert.equal(decodeEntities("Lynn&apos;s Library"), "Lynn's Library");
+  assert.equal(decodeEntities("Bell &amp; Book"), "Bell & Book");
+  assert.equal(decodeEntities("Curly&#39;s Corner"), "Curly's Corner");
+  assert.equal(decodeEntities("Little Free Library"), "Little Free Library", "plain text is untouched");
 });
 
 test("the plausibility gate rejects symbol soup", () => {

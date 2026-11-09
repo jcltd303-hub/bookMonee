@@ -1,5 +1,6 @@
 /** What the Node test suite imports: the pure logic, bundled so it runs without aliases. */
 export { assess } from "@/lib/scan/plausibility";
+export { decodeEntities } from "@/lib/text";
 export { extractIsbn, cleanSpineText } from "@/lib/scan/resolve";
 export { sameBook, supersedes, titleOverlap } from "@/lib/scan/dedupe";
 export { toIsbn13, isbn13Valid } from "@/lib/geo";
