@@ -38,12 +38,12 @@ function cents(value: number): number {
  * Textbooks in poor condition quote zero: every desk rejects water damage and broken
  * bindings on course books, so the model does too instead of returning a small number.
  */
-export function offerFrom(book: QuoteBook, buyer: Buyer): number {
+export function offerFrom(book: QuoteBook, buyer: Buyer, rate = buyer.payRate): number {
   if (book.lane === "textbook" && book.condition === "poor") return 0;
   const laneFit = book.lane === "textbook" ? buyer.textbookFit : buyer.tradeFit;
   const raw =
     book.demandUsd *
-    buyer.payRate *
+    rate *
     CONDITION_FACTOR[book.condition] *
     laneFit *
     (1 + jitter(`${book.isbn}:${buyer.id}`));
@@ -51,11 +51,29 @@ export function offerFrom(book: QuoteBook, buyer: Buyer): number {
   return value < buyer.floorUsd ? 0 : value;
 }
 
-/** Every desk's quote for one book, with the spread against the 99¢ cost and the bin gap. */
-export function quotesFor(book: QuoteBook, staged: Record<string, number> = {}): BuyerQuote[] {
+export type QuoteContext = {
+  /** Live offers by desk, which beat the model outright. */
+  live?: Record<string, number>;
+  /** Desk rates fitted from earlier live quotes. */
+  rates?: Record<string, number>;
+};
+
+/**
+ * Every desk's quote for one book, with the spread against the 99¢ cost and the bin gap.
+ *
+ * A live offer wins over the model when one is available: it is the actual number, and
+ * the model is only a guess at it. Live quotes are marked `modelled: false` so the UI
+ * can say which is which.
+ */
+export function quotesFor(
+  book: QuoteBook,
+  staged: Record<string, number> = {},
+  context: QuoteContext = {},
+): BuyerQuote[] {
   return buyers
     .map((buyer) => {
-      const offerUsd = offerFrom(book, buyer);
+      const live = context.live?.[buyer.id];
+      const offerUsd = live !== undefined ? cents(live) : offerFrom(book, buyer, context.rates?.[buyer.id]);
       const stagedUsd = cents(staged[buyer.id] ?? 0);
       const gapUsd = Math.max(0, cents(buyer.thresholdUsd - stagedUsd));
       return {
@@ -66,7 +84,7 @@ export function quotesFor(book: QuoteBook, staged: Record<string, number> = {}):
         stagedUsd,
         gapUsd,
         netUsd: cents(offerUsd - UNIT_COST_USD),
-        modelled: true,
+        modelled: live === undefined,
       };
     })
     .sort((a, b) => b.netUsd - a.netUsd || b.offerUsd - a.offerUsd);

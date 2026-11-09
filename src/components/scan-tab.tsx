@@ -4,8 +4,8 @@ import { books } from "@/lib/catalog";
 import { judgeShelf } from "@/lib/agents/decide";
 import { demandByIsbn } from "@/lib/agents/rag";
 import { lookupBook, isOffline } from "@/lib/catalog/lookup";
-import { quotesFor, UNIT_COST_USD } from "@/lib/market/quote";
-import { quoteBookFromPick, stagedUsd } from "@/lib/market/from-judgement";
+import { UNIT_COST_USD } from "@/lib/market/quote";
+import { quoteBookFromPick } from "@/lib/market/from-judgement";
 import { comparatorUrl } from "@/data/buyers";
 import { formatUsd, toIsbn13 } from "@/lib/geo";
 import { useRun } from "@/lib/store";
@@ -33,7 +33,7 @@ export function ScanTab() {
   const setLeaveCount = useRun((s) => s.setLeaveCount);
   const setOffline = useRun((s) => s.setOffline);
   const pushPick = useRun((s) => s.pushPick);
-  const setQuotes = useRun((s) => s.setQuotes);
+  const refreshLive = useRun((s) => s.refreshLive);
   const noteTake = useRun((s) => s.noteTake);
   const resetBox = useRun((s) => s.resetBox);
   const stage = useRun((s) => s.stage);
@@ -69,7 +69,7 @@ export function ScanTab() {
         net: shelf,
       });
       pushPick(pick);
-      setQuotes(quotesFor(quoteBookFromPick(pick), stagedUsd(desk)));
+      void refreshLive(pick);
       if (pick.decision === "take") noteTake();
       setIsbn(code);
     } catch {
@@ -227,7 +227,9 @@ function QuoteBench({
     <section className="grid gap-3 rounded-xl border border-border bg-surface p-4">
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="text-xl">Desk quotes</h2>
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted">modelled</span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted">
+          {quotes.some((quote) => !quote.modelled) ? "live where available" : "modelled"}
+        </span>
       </div>
       <p className="text-sm text-muted">
         {book.title || book.isbn} · cost is a flat {formatUsd(UNIT_COST_USD)} a copy. Spread is what the desk pays minus that cost, before packaging.
@@ -238,7 +240,10 @@ function QuoteBench({
           return (
             <li key={quote.buyerId} className={`grid gap-1 rounded-xl border p-3 ${isBest ? "border-primary" : "border-border"}`}>
               <div className="flex items-baseline justify-between gap-3">
-                <span className="font-semibold">{quote.buyerName}</span>
+                <span className="font-semibold">
+                  {quote.buyerName}
+                  {quote.modelled ? null : <span className="ml-2 text-[10px] uppercase tracking-wide text-primary">live</span>}
+                </span>
                 <span className={`tabular-nums ${quote.netUsd > 0 ? "text-primary" : "text-muted"}`}>
                   {quote.offerUsd > 0 ? `${formatUsd(quote.offerUsd)} · ${quote.netUsd > 0 ? "+" : ""}${formatUsd(quote.netUsd)}` : "no quote"}
                 </span>

@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Brain, Play } from "lucide-react";
 import { buyers, buyerName } from "@/data/buyers";
 import { policyTable } from "@/lib/agents/qlearn";
+import { calibrationSummary, totalObservations } from "@/lib/market/calibrate";
+
 import { formatUsd } from "@/lib/geo";
 import { useRun } from "@/lib/store";
 
@@ -15,6 +17,8 @@ export function TrainTab() {
   const activeStopId = useRun((s) => s.activeStopId);
   const logPayout = useRun((s) => s.logPayout);
   const q = useRun((s) => s.q);
+  const calibration = useRun((s) => s.calibration);
+  const clearCalibration = useRun((s) => s.clearCalibration);
   const qProgress = useRun((s) => s.qProgress);
   const qRunning = useRun((s) => s.qRunning);
   const trainQ = useRun((s) => s.trainQ);
@@ -28,6 +32,10 @@ export function TrainTab() {
   const boxes = Object.entries(memory).sort((a, b) => b[1].reward - a[1].reward);
   const earned = payouts.reduce((sum, payout) => sum + payout.usd, 0);
   const policy = policyTable(q);
+  const calibrationRows = calibrationSummary(calibration);
+  const observed = totalObservations(calibration);
+  const liveStatus = useRun((s) => s.liveStatus);
+  const liveOn = liveStatus === "on";
 
   return (
     <div className="grid gap-4">
@@ -100,6 +108,58 @@ export function TrainTab() {
         <p className="text-xs text-muted">
           Weights live in this browser's storage. Ship a bin on the Desk tab and that real outcome becomes a training step.
         </p>
+      </section>
+
+      <section className="grid gap-3 rounded-xl border border-border bg-surface p-4">
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 className="text-xl">Desk calibration</h2>
+          <span className={`text-xs font-semibold uppercase tracking-wide ${liveOn ? "text-primary" : "text-muted"}`}>
+            {liveOn ? "live quotes on" : liveStatus === "off" ? "no quote source" : "not asked yet"}
+          </span>
+        </div>
+        <p className="text-sm text-muted">
+          {liveOn
+            ? "Each live quote is compared with what the model predicted for that book and folded into the desk's rate. The prior holds the rate steady until the evidence outweighs it."
+            : "Point this deployment at a quote source (QUOTE_API_URL on the server, see README) and every quote you receive retunes the desk rates below. Until then these are the modelled priors."}
+        </p>
+        <dl className="grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <dt className="text-muted">Live quotes seen</dt>
+            <dd className="tabular-nums text-lg">{observed}</dd>
+          </div>
+          <div>
+            <dt className="text-muted">Desks retuned</dt>
+            <dd className="tabular-nums text-lg">{calibrationRows.filter((row) => row.observations > 0).length}</dd>
+          </div>
+        </dl>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-muted">
+              <th className="font-normal">Desk</th>
+              <th className="font-normal text-right">Prior</th>
+              <th className="font-normal text-right">Now</th>
+              <th className="font-normal text-right">Quotes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {calibrationRows.map((row) => {
+              const moved = Math.abs(row.adjustedRate - row.priorRate) > 0.005;
+              return (
+                <tr key={row.buyerId}>
+                  <td className="py-1">{row.buyerName}</td>
+                  <td className="py-1 text-right tabular-nums text-muted">{row.priorRate.toFixed(2)}</td>
+                  <td className={`py-1 text-right tabular-nums ${moved ? "text-primary" : ""}`}>{row.adjustedRate.toFixed(2)}</td>
+                  <td className="py-1 text-right tabular-nums text-muted">{row.observations}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {observed ? (
+          <button type="button" onClick={clearCalibration} className="h-9 rounded-xl border border-border text-sm font-semibold text-muted">
+            Reset to the priors
+          </button>
+        ) : null}
       </section>
 
       <section className="grid gap-2 rounded-xl border border-border bg-surface p-4">

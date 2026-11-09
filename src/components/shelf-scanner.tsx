@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BookOpen, Camera, Check, Loader2, X } from "lucide-react";
 import { judgeShelf } from "@/lib/agents/decide";
-import { quotesFor } from "@/lib/market/quote";
-import { quoteBookFromPick, stagedUsd } from "@/lib/market/from-judgement";
+
 import { imageDataToRgba, readShelf, releaseOcr, type OcrProgress, type SpineRead } from "@/lib/scan/ocr";
 import { resolveSpine, resolveText, type SpineGuess } from "@/lib/scan/resolve";
 import { segmentFrame, type SpineBox } from "@/lib/scan/spines";
@@ -39,7 +38,7 @@ export function ShelfScanner({ onVerify }: { onVerify: () => void }) {
   const desk = useRun((s) => s.desk);
   const offline = useRun((s) => s.offline);
   const pushPick = useRun((s) => s.pushPick);
-  const setQuotes = useRun((s) => s.setQuotes);
+  const refreshLive = useRun((s) => s.refreshLive);
   const noteTake = useRun((s) => s.noteTake);
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -238,7 +237,7 @@ export function ShelfScanner({ onVerify }: { onVerify: () => void }) {
       net: shelf,
     });
     pushPick(pick);
-    setQuotes(quotesFor(quoteBookFromPick(pick), stagedUsd(desk)));
+    void refreshLive(pick);
     if (pick.decision === "take") noteTake();
     setResults((current) =>
       current.map((entry) => (entry.read.text === result.read.text ? { ...entry, taken: true } : entry)),

@@ -5,6 +5,8 @@ export { extractIsbn, cleanSpineText } from "@/lib/scan/resolve";
 export { sameBook, supersedes, titleOverlap } from "@/lib/scan/dedupe";
 export { toIsbn13, isbn13Valid } from "@/lib/geo";
 export { quotesFor, offerFrom, UNIT_COST_USD } from "@/lib/market/quote";
+export { recordObservation, adjustedRate, ratesFor, totalObservations, PRIOR_STRENGTH } from "@/lib/market/calibrate";
+export { matchBuyer, normaliseOffers, offersByDesk, quoteEndpoint, liveQuotesEnabled } from "@/lib/market/live";
 export { packBins, binCash } from "@/lib/market/pack";
 export { makeQ, qShapeOk, greedy, policyTable } from "@/lib/agents/qlearn";
 export { pretrainedAgent, runEpisode, mulberry32, makeEnv } from "@/lib/agents/sim";

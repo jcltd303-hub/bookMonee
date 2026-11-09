@@ -6,6 +6,10 @@ import { FLUSH_PENALTY, pretrainedAgent, trainSlices } from "@/lib/agents/sim";
 import { SHIP, makeQ, qShapeOk, updateTerminal, type QAgent } from "@/lib/agents/qlearn";
 import { buyers } from "@/data/buyers";
 import { binCash } from "@/lib/market/pack";
+import { quotesFor } from "@/lib/market/quote";
+import { quoteBookFromPick, stagedUsd } from "@/lib/market/from-judgement";
+import { recordObservation, ratesFor, type Calibration } from "@/lib/market/calibrate";
+import { cachedLive, fetchLiveQuotes, liveQuotesEnabled, offersByDesk, type LiveResult } from "@/lib/market/live";
 import { supersedes } from "@/lib/scan/dedupe";
 import type { BuyerQuote, DeskItem, Judgement, PlannedLeg, Payout } from "@/lib/types";
 
@@ -36,6 +40,12 @@ type RunState = {
   desk: Record<string, DeskItem[]>;
   /** Books taken from the box currently open, so replacements stay honest. */
   boxTakes: number;
+  /** Desk rates fitted from live quotes seen so far. */
+  calibration: Calibration;
+  /** Live quote results by ISBN, so a re-scan does not re-request. */
+  live: Record<string, LiveResult>;
+  /** Whether this deployment has a working quote source. */
+  liveStatus: "unknown" | "on" | "off";
   /** On-device trading agent. */
   q: QAgent;
   qProgress: number;
@@ -52,6 +62,9 @@ type RunState = {
   setRoute: (route: PlannedLeg[]) => void;
   setActiveStopId: (id: string) => void;
   pushPick: (pick: Judgement) => void;
+  /** Fetch live quotes for a pick, fold them into the desk model, re-quote. */
+  refreshLive: (pick: Judgement) => Promise<void>;
+  clearCalibration: () => void;
   setQuotes: (quotes: BuyerQuote[]) => void;
   noteTake: () => void;
   resetBox: () => void;
@@ -84,6 +97,19 @@ function cents(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+/** Quotes for one pick from the current model, cached live offers and fitted rates. */
+function quoteNow(
+  state: { desk: Record<string, { offerUsd: number }[]>; calibration: Calibration; live: Record<string, LiveResult> },
+  pick: Judgement,
+) {
+  const book = quoteBookFromPick(pick);
+  const live = state.live[book.isbn] ?? cachedLive(book.isbn);
+  return quotesFor(book, stagedUsd(state.desk), {
+    live: offersByDesk(live),
+    rates: ratesFor(state.calibration),
+  });
+}
+
 export const useRun = create<RunState>()(
   persist(
     (set, get) => ({
@@ -107,6 +133,9 @@ export const useRun = create<RunState>()(
       shelfReplay: [],
       quotes: [],
       desk: {},
+      calibration: {},
+      live: {},
+      liveStatus: "unknown",
       boxTakes: 0,
       q: makeQ(),
       qProgress: 0,
@@ -127,7 +156,36 @@ export const useRun = create<RunState>()(
           // Panning and re-reading the same spine must not become two copies of the book,
           // and a barcode scan should replace the OCR guess it confirms.
           picks: [pick, ...state.picks.filter((item) => !supersedes(pick, item))].slice(0, 24),
+          // Quote immediately from the model and any cached live offers, then refresh.
+          quotes: quoteNow(state, pick),
         })),
+      refreshLive: async (pick) => {
+        if (!liveQuotesEnabled()) return;
+        const book = quoteBookFromPick(pick);
+        const result = await fetchLiveQuotes(book.isbn);
+        if (!result) return;
+        set((state) => {
+          const liveStatus = result.ok || result.offers.length ? "on" : /501|no quote source|404/i.test(result.error ?? "") ? "off" : state.liveStatus;
+          let calibration = state.calibration;
+          for (const offer of result.offers) {
+            calibration = recordObservation(calibration, {
+              buyerId: offer.buyerId,
+              offerUsd: offer.offerUsd,
+              demandUsd: book.demandUsd,
+              condition: book.condition,
+              lane: book.lane,
+            });
+          }
+          const next = { ...state, calibration, live: { ...state.live, [book.isbn]: result } };
+          return {
+            calibration,
+            liveStatus,
+            live: next.live,
+            quotes: quoteNow(next, pick),
+          };
+        });
+      },
+      clearCalibration: () => set({ calibration: {}, live: {} }),
       setQuotes: (quotes) => set({ quotes }),
       noteTake: () => set((state) => ({ boxTakes: state.boxTakes + 1 })),
       resetBox: () => set({ boxTakes: 0 }),
@@ -290,6 +348,8 @@ export const useRun = create<RunState>()(
         picks: state.picks,
         desk: state.desk,
         quotes: state.quotes,
+        calibration: state.calibration,
+        live: state.live,
         q: state.q,
       }),
     },

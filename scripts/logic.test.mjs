@@ -29,6 +29,14 @@ import {
   runEpisode,
   mulberry32,
   buyers,
+  recordObservation,
+  adjustedRate,
+  ratesFor,
+  totalObservations,
+  matchBuyer,
+  normaliseOffers,
+  offersByDesk,
+  quoteEndpoint,
 } from "../.bench-test/logic.mjs";
 
 test("ISBN-13 check digit is enforced, not just the shape", () => {
@@ -128,6 +136,70 @@ test("the packer is deterministic and never pays more cost than books staged", (
   assert.deepEqual(second.bins, first.bins);
   const staged = first.bins.reduce((sum, bin) => sum + bin.items.length, 0);
   assert.equal(first.costUsd, Math.round(staged * UNIT_COST_USD * 100) / 100);
+});
+
+test("live quotes retune a desk, slowly", () => {
+  const buyer = buyers[0];
+  const obs = { buyerId: buyer.id, offerUsd: 0, demandUsd: 100, condition: "good", lane: "textbook" };
+  // A quote well above what the model predicts should raise the rate, but one quote
+  // must not move it far: the prior is worth PRIOR_STRENGTH observations.
+  const predicted = 100 * buyer.payRate * buyer.textbookFit;
+  let cal = recordObservation({}, { ...obs, offerUsd: predicted * 2 });
+  const afterOne = adjustedRate(buyer, cal);
+  assert.ok(afterOne > buyer.payRate, "a high quote raises the rate");
+  assert.ok(afterOne < buyer.payRate * 1.15, "one quote moves it by under a tenth");
+
+  for (let i = 0; i < 20; i += 1) cal = recordObservation(cal, { ...obs, offerUsd: predicted * 2 });
+  const afterMany = adjustedRate(buyer, cal);
+  assert.ok(afterMany > afterOne, "more evidence moves it further");
+  assert.ok(afterMany < buyer.payRate * 2, "and converges toward the observed ratio without reaching it");
+
+  // The band holds even under absurd evidence.
+  let wild = {};
+  for (let i = 0; i < 200; i += 1) wild = recordObservation(wild, { ...obs, offerUsd: predicted * 50 });
+  assert.ok(adjustedRate(buyer, wild) <= buyer.payRate * 3, "a rate can never run away");
+
+  assert.equal(totalObservations(cal), 21);
+  assert.equal(ratesFor(cal)[buyer.id], afterMany);
+});
+
+test("a zero quote is not evidence about the desk's rate", () => {
+  const buyer = buyers[0];
+  const cal = recordObservation({}, { buyerId: buyer.id, offerUsd: 0, demandUsd: 100, condition: "good", lane: "textbook" });
+  assert.equal(totalObservations(cal), 0);
+  assert.equal(adjustedRate(buyer, cal), buyer.payRate);
+});
+
+test("live payloads are matched to desks and deduped to the best offer", () => {
+  assert.equal(matchBuyer("booksrun"), "booksrun");
+  assert.equal(matchBuyer("World of Books"), "worldofbooks");
+  assert.equal(matchBuyer("Top Dollar 4 Books"), "topdollar");
+  assert.equal(matchBuyer("Some Other Shop"), null);
+
+  const offers = normaliseOffers({
+    offers: [
+      { buyerId: "booksrun", usd: 3.1 },
+      { buyer: "BooksRun", offerUsd: 4.2 },
+      { buyer: "World of Books", usd: 2 },
+      { buyer: "Unknown Vendor", usd: 99 },
+      { buyerId: "valore", usd: 0 },
+    ],
+  });
+  assert.deepEqual(offersByDesk({ isbn: "x", offers, at: 0, ok: true }), { booksrun: 4.2, worldofbooks: 2 });
+  assert.equal(offers.length, 2);
+  assert.equal(quoteEndpoint(), "/api/quotes", "falls back to this deployment's proxy");
+});
+
+test("a live offer beats the model and is marked live", () => {
+  const book = { isbn: "9781119659587", title: "Organic Chemistry", demandUsd: 78, lane: "textbook", condition: "good" };
+  const modelled = quotesFor(book);
+  const live = quotesFor(book, {}, { live: { booksrun: 9.99 } });
+  const liveRun = live.find((quote) => quote.buyerId === "booksrun");
+  const modelRun = modelled.find((quote) => quote.buyerId === "booksrun");
+  assert.equal(liveRun.offerUsd, 9.99);
+  assert.equal(liveRun.modelled, false);
+  assert.equal(modelRun.modelled, true);
+  assert.notEqual(modelRun.offerUsd, 9.99);
 });
 
 test("the trading agent starts ignorant and learns to make money", () => {

@@ -174,6 +174,33 @@ Set these in the Vercel project (Settings → Environment Variables), or in a lo
 
 `src/lib/map-config.ts` resolves these once; `MapView` never hardcodes a provider.
 
+## Live quotes and the desk model
+
+The app can ask for real buyback offers while you scan, and it keeps what it learns.
+
+The desks themselves publish no APIs and block automated collection, which is why the
+shipped model exists at all. So live quotes come through **one configured source** — an
+aggregator you have an account with, BookScouter being the realistic one — reached via a
+server route so the key stays server-side:
+
+| Variable | Where | Purpose |
+| --- | --- | --- |
+| `QUOTE_API_URL` | server | upstream that accepts `?isbn=` and returns `{ "offers": [...] }` |
+| `QUOTE_API_KEY` | server | sent upstream as a bearer token, never to the browser |
+| `VITE_QUOTE_API_URL` | browser | override for a public, CORS-open endpoint |
+
+`server/routes/api/quotes.get.ts` proxies it and answers 501 when nothing is
+configured, so an unconfigured deployment keeps working on modelled quotes. Offers are
+matched to desks by name (`BooksRun`, `World of Books`, `Top Dollar 4 Books`…), deduped
+to the best per desk, and cached per ISBN for six hours.
+
+**The model retains what it sees.** Each live offer is compared with what the model
+predicted for that book — condition and lane fit divided out — and folded into that
+desk's rate. The blend is weighted twelve observations toward the prior, so one quote
+moves a desk by under a tenth and a persistent bias takes a dozen to show. Rates are
+clamped to 0.3–3× the prior so no run of odd books can reprice a desk, and the Train tab
+shows prior, current rate and observation count per desk with a reset button.
+
 ## Tests
 
 `npm run test:logic` bundles the pure logic and runs it under `node --test`: ISBN

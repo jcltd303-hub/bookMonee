@@ -29,7 +29,8 @@ const DEFAULTS = {
 };
 
 function env(key: string): string {
-  const value = (import.meta.env as Record<string, string | undefined>)[key];
+  const bag = (import.meta as { env?: Record<string, string | undefined> }).env;
+  const value = bag?.[key];
   return typeof value === "string" ? value.trim() : "";
 }
 
