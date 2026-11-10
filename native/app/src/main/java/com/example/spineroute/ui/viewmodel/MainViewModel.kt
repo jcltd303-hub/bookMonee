@@ -59,7 +59,7 @@ data class UiState(
     val currentQuotes: List<BuyerQuote> = emptyList(),
     val desk: Map<String, List<DeskItem>> = emptyMap(),
     val packResult: PackResult = PackResult(emptyList(), 0.0, 0.0, 0.0, 0.0, emptyList(), emptyList()),
-    val qAgent: QAgent = QTrader.defaultAgent(),
+    val qAgent: QAgent = QTrader.pretrained(),
     val isTraining: Boolean = false,
     val trainingProgress: Int = 0,
     val memory: Map<String, BoxMemory> = emptyMap(),

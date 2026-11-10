@@ -202,6 +202,11 @@ trained on the device against a simulated market. Two rules keep it honest:
   inherits their credit. At 84,000 simulated shelves the policy had collapsed to "ship the
   ready bin" in every state, including with empty bins. Masking the action fixed it, and
   `legalActions` is now the single place that decides.
+- **Stage is only legal for a book that clears its own 99¢ cost.** Same reasoning as shipping:
+  a copy that cannot pay for itself is a guaranteed loss. Without it the agent learned
+  "close the gap" as a general policy and staged worthless books — on the bad-book probe
+  Q(stage) 48 against Q(skip) 18. With it, that row is Skip by construction rather than by a
+  thin margin a different seed could flip.
 - **Weights carry a version.** Changing the action semantics bumps `Q_VERSION`, so a browser
   holding a collapsed agent discards it and retrains rather than keeping it forever.
 

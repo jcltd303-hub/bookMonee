@@ -5,7 +5,9 @@ data class QAgent(
     val episodes: Int = 0,
     val steps: Int = 0,
     val avgReward: Double = 0.0,
-    val eps: Double = 0.15
+    val eps: Double = 0.15,
+    /** Action/feature model version. Weights from an older one are discarded, not reused. */
+    val version: Int = 2
 )
 
 data class PolicyRow(

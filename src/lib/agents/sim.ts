@@ -1,6 +1,6 @@
 import { buyers } from "@/data/buyers";
-import { UNIT_COST_USD } from "@/lib/market/quote";
 import { Q_FEATURES, SHIP, SKIP, STAGE, act, legalActions, makeQ, update, type QAgent } from "@/lib/agents/qlearn";
+import { UNIT_COST_USD } from "@/lib/market/quote";
 
 /**
  * Synthetic wholesale market used to pre-train the trading agent on device.
@@ -143,14 +143,14 @@ export function runEpisode(
   let total = 0;
   let book = drawBook(random);
   let x = featuresOf(book, env);
-  let allowed = legalActions(anyReady(env));
+  let allowed = legalActions(anyReady(env), bestOffer(book).offerUsd > UNIT_COST_USD);
   for (let t = 0; t < steps; t += 1) {
     const action = act(probe, x, random, allowed);
     const reward = step(env, book, action);
     total += reward;
     book = drawBook(random);
     const nextX = featuresOf(book, env);
-    const nextAllowed = legalActions(anyReady(env));
+    const nextAllowed = legalActions(anyReady(env), bestOffer(book).offerUsd > UNIT_COST_USD);
     if (opts.learn) update(agent, x, action, reward, nextX, nextAllowed);
     x = nextX;
     allowed = nextAllowed;

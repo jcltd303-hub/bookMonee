@@ -73,8 +73,13 @@ export function qShapeOk(agent: QAgent | undefined): agent is QAgent {
  * policy had collapsed to "ship" in every state after 84,000 shelves), and shipping an
  * uncleared bin, which is a guaranteed loss once the desk rejects it.
  */
-export function legalActions(hasReady: boolean): boolean[] {
-  return [true, true, hasReady];
+export function legalActions(hasReady: boolean, canStage = true): boolean[] {
+  // Staging a copy that cannot clear its own acquisition cost is a guaranteed loss, so it
+  // is not offered — the same reasoning as shipping an uncleared bin. Without it the agent
+  // learned "close the gap" as a general policy and staged worthless books: measured on the
+  // bad-book probe, Q(stage) 48 against Q(skip) 18, while the JS agent only avoided it by a
+  // thin margin that a different seed could flip.
+  return [true, canStage, hasReady];
 }
 
 export const ACTION_LABELS = ["Skip", "Stage to the best desk", "Ship the ready bin"] as const;
@@ -155,19 +160,19 @@ export function updateTerminal(agent: QAgent, x: number[], action: number, rewar
 }
 
 /** Canonical probe states, so the Train tab can show what the policy actually prefers. */
-export function probeStates(): { label: string; x: number[]; staged: boolean }[] {
+export function probeStates(): { label: string; x: number[]; staged: boolean; stageable: boolean }[] {
   return [
-    { label: "Good book, bins empty", x: [0.6, 1.4, 0, 0, 0, 0.8, 0], staged: false },
-    { label: "Good book, label nearly clear", x: [0.5, 1.2, 0.85, 0.7, 0.6, 0.1, 0], staged: false },
-    { label: "Thin book, label already clear", x: [0.08, -0.2, 1, 0.8, 1, 0, 1], staged: true },
-    { label: "Bad book, bins empty", x: [0.02, -0.6, 0, 0, 0, 0.9, 0], staged: false },
+    { label: "Good book, bins empty", x: [0.6, 1.4, 0, 0, 0, 0.8, 0], staged: false, stageable: true },
+    { label: "Good book, label nearly clear", x: [0.5, 1.2, 0.85, 0.7, 0.6, 0.1, 0], staged: false, stageable: true },
+    { label: "Thin book, label already clear", x: [0.08, -0.2, 1, 0.8, 1, 0, 1], staged: true, stageable: true },
+    { label: "Bad book, bins empty", x: [0.02, -0.6, 0, 0, 0, 0.9, 0], staged: false, stageable: false },
   ];
 }
 
 export function policyTable(agent: QAgent): { label: string; action: string; value: number }[] {
   return probeStates().map((probe) => {
     const values = qValues(agent, probe.x);
-    const best = greedy(agent, probe.x, legalActions(probe.staged));
+    const best = greedy(agent, probe.x, legalActions(probe.staged, probe.stageable));
     return {
       label: probe.label,
       action: actionLabel(best),

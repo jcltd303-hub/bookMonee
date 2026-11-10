@@ -358,6 +358,16 @@ test("an illegal action is never chosen, however high its value", () => {
   assert.ok(legalActions(false)[masked], "and the choice is a legal one");
 });
 
+test("a book that cannot clear its own cost is never staged", () => {
+  assert.deepEqual(legalActions(false, false), [true, false, false]);
+  assert.deepEqual(legalActions(true, false), [true, false, true]);
+  const agent = makeQ();
+  agent.w[1 * 7 + 0] = 999; // staging looks enormously valuable
+  const x = [0.02, -0.6, 0, 0, 0, 0.9, 0];
+  assert.equal(greedy(agent, x), 1, "without the gate the huge stage value wins");
+  assert.notEqual(greedy(agent, x, legalActions(false, false)), 1, "with it, staging is not offered");
+});
+
 test("a bin is only ready when it has cleared its label", () => {
   const env = makeEnv();
   env.bins[0] = 2; // below the first desk's label
