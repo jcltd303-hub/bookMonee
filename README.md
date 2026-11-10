@@ -219,6 +219,48 @@ the best title no one else is better placed to claim. Duplicate copies are allow
 two reads are near-identical, since a little free library can hold two of the same book
 — a deliberate departure from the paper, whose catalogue is a library inventory.
 
+## Running on a phone (Termux) and shipping an APK
+
+**Termux can run the web side; it cannot run YOLO.** Ultralytics needs PyTorch, and PyTorch
+has no wheels for Termux's Android/bionic toolchain — `pip install ultralytics` will fail
+regardless of how you set it up. Train and export on Colab, Kaggle or a laptop, and treat the
+phone as a client and a test bench.
+
+What does work in Termux:
+
+```bash
+pkg update && pkg install nodejs-lts git gh
+git clone https://github.com/jcltd303-hub/bookMonee && cd bookMonee
+npm ci
+npm run bench                    # the OCR benchmark, on the device
+npm run fetch:model              # download weights, if SPINE_MODEL_URL is set
+npm run build && npm run preview # then open localhost:8081
+```
+
+If `npm ci` or the build is killed for memory, cap the heap: `NODE_OPTIONS=--max-old-space-size=1024`.
+
+### An APK
+
+Everything the app needs already runs in a WebView — camera, WASM OCR, ONNX detection,
+IndexedDB, service worker — so the cheapest route is a native shell rather than a rewrite:
+
+1. **Trusted Web Activity** — the PWA you have, wrapped for Play. Least work, needs Chrome,
+   no native code at all.
+2. **Capacitor** — bundle the built output in the APK, still a WebView, but self-contained
+   and offline-first. `npx cap add android`, point it at the build output, and handle the
+   camera permission (Android's WebView only grants `getUserMedia` if the app handles
+   `onPermissionRequest`). Capacitor serves from `https://localhost` by default, which is a
+   secure context, so the camera and WASM work unchanged.
+
+Two things to change when you bundle rather than host:
+
+- **The quote proxy stops existing.** `/api/quotes` is a Vercel function; inside an APK there
+  is no server. Set `VITE_QUOTE_API_URL=https://okmonee.vercel.app/api/quotes` in the native
+  build so live quotes still reach the deployed proxy, or leave it unset and the app quietly
+  keeps using modelled quotes.
+- **Nothing else needs the network.** The OCR engine, the detector model and the catalogue
+  are all bundled assets, so a shelf reads with no signal.
+
 ## Tests
 
 `npm run test:logic` bundles the pure logic and runs it under `node --test`: ISBN
