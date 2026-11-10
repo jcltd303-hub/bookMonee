@@ -31,8 +31,16 @@ mkdirSync(dirname(out), { recursive: true });
 const source = process.argv[2] ?? process.env.SPINE_MODEL_URL;
 
 if (!source) {
+  // Runs during `prebuild`, so this is the normal path for a deployment with no model:
+  // the app falls back to its own segmenter and nothing fails.
   console.log("[model] no model configured — the app will use its own segmenter.");
-  console.log("[model] pass a path or set SPINE_MODEL_URL to install one.");
+  console.log("[model] set SPINE_MODEL_URL (Vercel → Environment Variables) or pass a path.");
+  process.exit(0);
+}
+
+if (!/^https?:/i.test(source) && !existsSync(source)) {
+  // A stale SPINE_MODEL_URL must not fail an otherwise good deploy.
+  console.warn(`[model] ${source} is not a URL and not a file — skipping, segmenter stays in use.`);
   process.exit(0);
 }
 

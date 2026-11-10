@@ -160,6 +160,22 @@ Two ways to find the books, in order:
    books is oriented-box (ASC-YOLOv8, AGPL-3.0, reports 99.4 mAP50 on a spine dataset but
    ships no checkpoints), and tilt is exactly where the segmenter fails. The angle is
    resolved into axis-aligned bounds for the crop.
+
+   **Where the export runs.** Not on Vercel, and not in this repo — YOLO needs Python, and
+   only to produce the file. Train wherever you have a GPU (Colab or Kaggle free tiers, or
+   a local card); export on any machine, CPU is fine and it takes seconds:
+
+   ```
+   pip install ultralytics
+   yolo export model=best.pt format=onnx imgsz=640
+   ```
+
+   Then get the `.onnx` into the build one of two ways: set `SPINE_MODEL_URL` in the Vercel
+   project and `prebuild` downloads it (the usual choice, keeps the repo small), or drop the
+   file at `public/models/spines.onnx` and remove that line from `.gitignore`. A missing or
+   stale `SPINE_MODEL_URL` never fails a deploy — the build says so and the segmenter stays
+   in use. At runtime the browser runs the ONNX through ONNX Runtime Web; nothing calls
+   YOLO, and nothing leaves the device.
 2. **The local segmenter** (`src/lib/scan/spines.ts`) otherwise: column gradients, peaks,
    a tall-and-narrow prior. No model, no network, and the reason three spines in the
    benchmark are never read — it merges books that touch.
