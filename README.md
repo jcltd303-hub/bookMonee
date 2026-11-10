@@ -65,119 +65,32 @@ testable and what makes them portable to a worker later.
 
 ## Deploying
 
-Vercel is configured on the Vercel side, not in this repo: build command
-`npm run build`, output from the Nitro `vercel` preset in `.vercel/output`,
-Node 22 or newer (`@tanstack/react-start` requires `>=22.12.0`, pinned in
-`package.json`). No CI workflow ships the app.
+Two ways in, pick one — using both means every push deploys twice.
 
-`public/tesseract/` is generated at build time by `scripts/copy-ocr-assets.mjs`
-(the OCR engine's worker, WASM core and English model, about 11 MB) and is not
-committed.
+**Vercel's own Git integration** (simplest). Connect the repo in the Vercel dashboard.
+`vercel.json` carries what the build needs: `npm ci --omit=dev` for install (all build
+tooling is in `dependencies`, so production-only install is enough), `npm run build` for
+the build, and cache headers for the hashed assets, the OCR engine and the detector model.
+`package.json` pins Node `>=22.12.0`, which `@tanstack/react-start` requires.
 
-## Measuring the OCR
+**A manual workflow** (`.github/workflows/deploy-vercel.yml`). Deliberately
+`workflow_dispatch` only, so it cannot fire alongside the integration above. Run it from
+the Actions tab to deploy a commit from CI, choosing `production` or `preview`. It needs
+three repository secrets:
 
-The scan path is the one part that cannot be checked by reading code — it depends on
-how real spines look. `npm run bench` runs the production pipeline (crop, rotate,
-binarise, plausibility gate) over labelled images in Node, with the same Tesseract
-model the app ships. No browser, about a second for a shelf.
-
-```
-npm run bench                      # bench/spines, from manifest.json
-npm run bench -- --no-gate         # same, with the plausibility gate disabled
-npm run bench -- --dir ~/spines --verbose
-npm run bench -- --segment         # also report spine segmentation per file
-```
-
-`bench/spines/manifest.json` pairs each file with the text you expect; `""` means the
-image should be *rejected*. Replace the synthetic samples with photographs of a real
-shelf — that is the point of the harness.
-
-`--dump` writes every prepared crop to `.bench/dump/`, so a bad read can be looked at
-instead of guessed at. That flag is how the real-photo problem below was diagnosed.
-
-### Baselines
-
-| Fixtures | Result | Noise accepted | Time |
-| --- | --- | --- | --- |
-| 5 synthetic spines | 5/5 exact | 0/3 | ~1.3 s |
-| 6 real spine photographs | 7/11 labelled (5 exact, 2 partial) | 0/3 | ~2.7 s |
-| 3 real shelf rows, whole rows with segmentation | 13/17 titles, 24–31 spines a row | — | ~2.7 s a spine |
-
-With `--no-gate` the reads are identical but one noise image is accepted — the gate costs
-nothing in accuracy and blocks a false accept.
-
-The spine fixtures are cut from 3264×2448 and 3840×2161 originals at about 1400 px tall, so
-a spine is 56–335 px wide with 20–40 px type. The shelf rows are cut from photographs of a
-real book case, between the shelf boards, with the expected titles labelled by reading them
-— they score the whole path, segmentation included.
-
-What the shelf rows changed, each measured:
-
-| Change | Result |
+| Secret | Where it comes from |
 | --- | --- |
-| Gate: only alphabetic single letters count as noise | `DAVID JASON: 3 4` stopped being rejected |
-| Gate: four-letter floor instead of six | recovered `CAINE`, `DUNE`, `POTTER`-length titles |
-| Ranking leads with known words, not plausibility score | stopped a garbage read winning the rotation contest |
-| 3× upscale instead of 2× | 10/17 → 13/17 titles |
-| Minimum edge spacing 0.016 instead of 0.02 | same titles, 24–31 spines a row instead of 21–22 |
+| `VERCEL_TOKEN` | Vercel → Account Settings → Tokens |
+| `VERCEL_ORG_ID` | `npx vercel link` in the repo, then `.vercel/project.json` |
+| `VERCEL_PROJECT_ID` | same file |
 
-Together: 10/17 → 13/17 titles, noise still 0/3. Three titles are still never read at all
-(`TEACH YOURSELF`, `LAROUSSE`, `POTTER`); the dump shows them inside boxes spanning several
-spines, which is a resolution problem the correction tap covers rather than a gate problem.
+Until they exist the job fails immediately with a message naming what is missing. It builds
+with `vercel build` rather than calling Vite directly, so CI and Vercel cannot drift apart,
+then deploys the prebuilt output and smoke-checks the live URL for the app shell.
 
-Three attempts failed and were reverted: scoring edge consistency down a column (10/17 — it
-fires on text strokes too), halving the edge spacing to 0.011 (36 boxes a row but spines cut
-in half, so `CAINE` reads as `CAI` + `NE`, 10/17), and adding the halves of wide boxes as
-extra candidates (13/17, unchanged, at nearly double the runtime — and the box holding
-`LAROUSSE` was 119px against a split threshold of ~144, so it was never split anyway).
-Over-segmentation costs more titles than merging does, and the three unread titles are not
-reachable by adjusting the segmenter.
-
-Getting the real-photo numbers off zero took a grid search over preprocessing, scale,
-page-segmentation mode and crop insets. What helped:
-
-| Change | Why |
-| --- | --- |
-| Greyscale + contrast stretch instead of Otsu binarisation | beat binarisation at every scale: a hard threshold destroys the anti-aliased edges small type lives on, and Tesseract thresholds adaptively itself |
-| 2x upscale, clamped so the long side stays under 2400 px | 2x beat 1x and 3x at every setting; the clamp is because leptonica's allocations fail on 2800 px strips |
-| Page segmentation mode 6 (uniform block) | the default reads a 25:1 spine strip as a page layout and fragments it |
-
-What did **not** help, measured and reverted: insetting the crop to drop neighbouring
-spines (3 titles at inset 0, 2 at 6%, 1 at 12%); detecting text lines and OCRing each
-one separately (1 title against 3); scaling by the tallest ink run instead of a flat
-multiplier (4 of 6 rejected, and slower); and raising the source resolution on its own.
-
-### Reading speed
-
-Results stream into the shelf as each spine finishes, so the first book appears in about
-a second instead of after the whole shelf. Reading runs on a pool of engines, but the
-pool is sized from `navigator.hardwareConcurrency` rather than fixed: measured on a
-two-core machine, two workers is *worse* than one — 19.4 s against 18.4 s for the same
-fixtures, with each read taking twice as long, because the engines contend for the same
-cores. Four cores or more gets two engines; anything less gets one.
-
-`npm run bench -- --workers 2` reproduces that comparison on any machine.
-
-Tuning Tesseract is now exhausted, measured rather than assumed: a capitals-only
-character whitelist changes nothing (1 title either way), adaptive (Sauvola) thresholding
-changes nothing, and single-line mode (PSM 7) reads *zero* titles. The stock English
-model is the ceiling.
-
-So the app stops pretending the engine is enough and puts the reader in the loop:
-
-- Every spine card shows what the camera read in an editable field with a **Find book**
-  button. Correcting a misread costs one tap and a second lookup — far cheaper than
-  anything that could be done to the image.
-- A barcode scan **upgrades** the OCR guess it confirms instead of sitting beside it as
-  a second book (`supersedes` in `src/lib/scan/dedupe.ts`, tested). Confirmed ISBNs
-  always beat guesses; a guess never displaces a confirmed one.
-- Reads under 55% confidence are labelled as needing a check.
-
-Still not good enough on its own. Two spines in six read, and both are partial. The dumps show
-crops that are plain to a human while the engine returns `ARnvEN FARR COMMUNITY FARM`,
-so what is left is not tuning: it needs a recogniser that handles stylised type better
-than Tesseract's stock English model, or a scene-text model trained on spines. The
-fixtures and `--dump` are here to measure whatever replaces it.
+Either way the build ends in `.vercel/output` via Nitro's `vercel` preset, and
+`prebuild` copies the ~10 MB OCR engine into `public/tesseract/` — which is why that
+directory is gitignored and rebuilt on every deploy.
 
 ## Environment
 

@@ -1,0 +1,10 @@
+# Not needed to build the app; keeps the upload small.
+bench/
+artifacts/
+screenshots/
+scrapers/
+attachments/
+*.zip
+
+# Keep scripts/ and migrations/: prebuild copies the OCR assets from scripts/,
+# and `npm run build` ends with db:migrate.

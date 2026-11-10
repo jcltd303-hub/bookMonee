@@ -1,0 +1,89 @@
+name: Deploy to Vercel
+
+# Manual only, on purpose. If this repo is connected to Vercel through its own Git
+# integration, every push already deploys, and a push-triggered workflow would deploy
+# twice. Run this from the Actions tab when you want a deploy from CI — for example to
+# deploy a commit Vercel has not built, or to keep deploys in the same place as the tests.
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Deployment target"
+        type: choice
+        options: [production, preview]
+        default: production
+
+concurrency:
+  group: vercel-${{ inputs.target }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.target }}
+      url: ${{ steps.deploy.outputs.url }}
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check deploy secrets
+        run: |
+          missing=""
+          [ -z "$VERCEL_TOKEN" ] && missing="$missing VERCEL_TOKEN"
+          [ -z "$VERCEL_ORG_ID" ] && missing="$missing VERCEL_ORG_ID"
+          [ -z "$VERCEL_PROJECT_ID" ] && missing="$missing VERCEL_PROJECT_ID"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing — add them under Settings → Secrets and variables → Actions. See the Deploying section of README.md."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      # `vercel build` runs the project's own install and build commands, so CI and
+      # Vercel cannot drift apart.
+      - name: Pull Vercel environment
+        run: npx --yes vercel@latest pull --yes --environment=${{ inputs.target == 'production' && 'production' || 'preview' }} --token="$VERCEL_TOKEN"
+
+      - name: Build
+        run: |
+          if [ "${{ inputs.target }}" = "production" ]; then
+            npx --yes vercel@latest build --prod --token="$VERCEL_TOKEN"
+          else
+            npx --yes vercel@latest build --token="$VERCEL_TOKEN"
+          fi
+
+      - name: Deploy
+        id: deploy
+        run: |
+          set -o pipefail
+          args="--prebuilt --token=$VERCEL_TOKEN"
+          if [ "${{ inputs.target }}" = "production" ]; then args="$args --prod"; fi
+          npx --yes vercel@latest deploy $args | tee /tmp/deploy.log
+          url=$(grep -oE 'https://[a-zA-Z0-9._-]+\.vercel\.app' /tmp/deploy.log | tail -1)
+          if [ -z "$url" ]; then echo "::error::Vercel did not return a URL"; exit 1; fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "### Deployed $url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke check
+        if: inputs.target == 'production'
+        run: |
+          url="${{ steps.deploy.outputs.url }}"
+          for attempt in $(seq 1 12); do
+            code=$(curl -s -o /tmp/page.html -w '%{http_code}' "$url" || true)
+            if [ "$code" = "200" ] && grep -q "Spine Route" /tmp/page.html; then
+              echo "Live: $url"; exit 0
+            fi
+            echo "attempt $attempt: HTTP $code"; sleep 5
+          done
+          echo "::error::Deployed site never served the app shell at $url"
+          exit 1
