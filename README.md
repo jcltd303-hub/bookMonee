@@ -269,9 +269,9 @@ check digits, spine-text extraction, the plausibility gate, book identity, quote
 floors, the packer's never-stage-a-loss rule, determinism, and that the trading agent
 actually learns. No framework, no aliases, about a second.
 
-`npm test` is the platform's older suite and is red for reasons unrelated to this app
-(its glob does not expand, and eight workspace tests fail in this environment). Treat
-`test:logic` as the one that gates the money logic.
+`npm test` runs it. The platform's older suite is still there as `npm run test:platform`,
+and is red for reasons unrelated to this app (its glob does not expand, and eight workspace
+tests fail in this environment) — which is why it is no longer the front door.
 
 ## Layout
 
