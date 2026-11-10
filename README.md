@@ -246,11 +246,25 @@ IndexedDB, service worker — so the cheapest route is a native shell rather tha
 
 1. **Trusted Web Activity** — the PWA you have, wrapped for Play. Least work, needs Chrome,
    no native code at all.
-2. **Capacitor** — bundle the built output in the APK, still a WebView, but self-contained
-   and offline-first. `npx cap add android`, point it at the build output, and handle the
-   camera permission (Android's WebView only grants `getUserMedia` if the app handles
-   `onPermissionRequest`). Capacitor serves from `https://localhost` by default, which is a
-   secure context, so the camera and WASM work unchanged.
+2. **Capacitor** — scaffolded in this repo, `android/` and `capacitor.config.ts`. Self-contained
+   and offline-first.
+
+The Capacitor path, from a clean clone:
+
+```bash
+npm ci
+npm run build:native      # prerenders "/" to static HTML and installs the OCR assets
+npx cap sync android      # copies the build into android/app/src/main/assets/public
+cd android && ./gradlew assembleDebug     # app/build/outputs/apk/debug/app-debug.apk
+```
+
+`build:native` exists because the Vercel build serves the page from a Nitro function and
+leaves no `index.html`; a WebView needs one. It sets `NATIVE_BUILD=1`, which turns on
+TanStack Start's prerender for `/`.
+
+Two Android specifics already handled: `CAMERA` is declared in the manifest, without which
+the WebView refuses `getUserMedia` no matter what the user taps, and `androidScheme: "https"`
+keeps the bundled origin a secure context, which the camera and the WASM engines require.
 
 Two things to change when you bundle rather than host:
 

@@ -172,7 +172,13 @@ export default defineConfig(({ command, isPreview }) => ({
     // PWA head + ?install=1 tutorial page; runs before Start/Nitro.
     grokPwaPlugin(),
     tailwindcss(),
-    tanstackStart(),
+    // NATIVE_BUILD prerenders "/" to static HTML, which is what a WebView needs: the
+    // Vercel build serves the same page from a Nitro function instead.
+    tanstackStart(
+      process.env.NATIVE_BUILD === "1"
+        ? { prerender: { enabled: true, crawlLinks: true, failOnError: false } }
+        : {},
+    ),
     ...(command === "build" || isPreview
       ? [
           nitro({

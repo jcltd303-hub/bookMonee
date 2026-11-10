@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Spine Route</string>
+    <string name="title_activity_main">Spine Route</string>
+    <string name="package_name">app.okmonee.spineroute</string>
+    <string name="custom_url_scheme">app.okmonee.spineroute</string>
+</resources>

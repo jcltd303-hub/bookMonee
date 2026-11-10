@@ -15,6 +15,7 @@
     "fetch:model": "node scripts/fetch-model.mjs",
     "prebuild": "node scripts/copy-ocr-assets.mjs && node scripts/fetch-model.mjs",
     "build": "node scripts/with-app-env.mjs vite build && npm run db:migrate",
+    "build:native": "node scripts/copy-ocr-assets.mjs && node scripts/fetch-model.mjs && NATIVE_BUILD=1 vite build",
     "db:migrate": "node scripts/migrate.mjs",
     "build:dev": "node scripts/with-app-env.mjs vite build --mode development",
     "preview": "node scripts/with-app-env.mjs vite preview",
@@ -95,6 +96,9 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@capacitor/android": "^6.2.3",
+    "@capacitor/cli": "^6.2.3",
+    "@capacitor/core": "^6.2.3",
     "@eslint/js": "^9.20.0",
     "@types/node": "^22.16.5",
     "@types/pg": "^8.11.10",
