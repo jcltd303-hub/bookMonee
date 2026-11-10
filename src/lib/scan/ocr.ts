@@ -1,5 +1,5 @@
 import { contrastStretch, cropRotateScale, type CropRect, type Rgba } from "@/lib/scan/pixels";
-import { assess, type Plausibility } from "@/lib/scan/plausibility";
+import { acceptRead, assess, type Plausibility } from "@/lib/scan/plausibility";
 import type { SpineBox } from "@/lib/scan/spines";
 
 /**

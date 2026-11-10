@@ -12,8 +12,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  acceptRead,
   assess,
   assignTitles,
+  catalogVocabulary,
   decodeYolo,
   nonMaxSuppression,
   toFrameBoxes,
@@ -153,6 +155,28 @@ test("letterboxing is undone and boxes are clipped to the frame", () => {
   );
   assert.equal(clipped.length, 1, "the sliver is dropped, the edge box is kept and clipped");
   assert.equal(clipped[0].x, 0);
+});
+
+test("reads from a real phone session are dropped, not carded", () => {
+  // Exactly what the live app produced from a shelf of legible books — the gate waved
+  // all of these through on shape alone and left six cards of noise to dismiss.
+  const junk = [
+    ["UV-B AE ETH IETIRI DIEDEDY en", 35],
+    ["es BB ErEsmE", 36],
+    ["ER BER wa EE DE SEE Tinie", 39],
+    ["TEE ames IE BE LE YS", 34],
+    ["pm WISIN BIEBER", 32],
+  ];
+  for (const [text, confidence] of junk) {
+    const verdict = acceptRead(text, confidence, catalogVocabulary);
+    assert.equal(verdict.accept, false, `should drop ${JSON.stringify(text)}`);
+  }
+
+  // A real title that the vocabulary has never seen still gets through on confidence.
+  assert.equal(acceptRead("1B THE CHAKRAS ACTIVITY JOURNAL Hiv JERSE", 52, catalogVocabulary).accept, true);
+  assert.equal(acceptRead("ORGANIC CHEMISTRY", 95, catalogVocabulary).accept, true);
+  // And two known words are enough even at low confidence.
+  assert.equal(acceptRead("THE HUNGER GAMES", 20, catalogVocabulary).accept, true);
 });
 
 test("the plausibility gate rejects symbol soup", () => {

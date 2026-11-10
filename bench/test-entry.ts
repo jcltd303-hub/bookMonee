@@ -1,5 +1,5 @@
 /** What the Node test suite imports: the pure logic, bundled so it runs without aliases. */
-export { assess } from "@/lib/scan/plausibility";
+export { acceptRead, assess } from "@/lib/scan/plausibility";
 export { assignTitles } from "@/lib/scan/match";
 export { decodeYolo, nonMaxSuppression, toFrameBoxes, unletterbox } from "@/lib/scan/yolo";
 export { decodeEntities } from "@/lib/text";
@@ -13,3 +13,4 @@ export { packBins, binCash } from "@/lib/market/pack";
 export { makeQ, qShapeOk, greedy, legalActions, policyTable, Q_VERSION } from "@/lib/agents/qlearn";
 export { pretrainedAgent, runEpisode, mulberry32, makeEnv, anyReady } from "@/lib/agents/sim";
 export { buyers } from "@/data/buyers";
+export { catalogVocabulary } from "@/lib/agents/rag";

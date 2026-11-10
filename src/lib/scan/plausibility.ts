@@ -10,6 +10,9 @@
  * word shape, and how much of it hits a known vocabulary. Pure functions, no imports,
  * so the browser and the Node benchmark score identically.
  */
+/** Words long enough to be evidence of a real title, not a coincidence like "be". */
+const EVIDENCE_WORD = 4;
+
 export type Plausibility = {
   score: number;
   /** True when the text is worth showing as a book. */
@@ -20,6 +23,8 @@ export type Plausibility = {
   singleLetterRatio: number;
   /** Share of tokens found in the vocabulary. */
   knownRatio: number;
+  /** How many distinct known words are long enough to count as evidence. */
+  longKnown: number;
   reason: string;
 };
 
@@ -79,6 +84,7 @@ export function assess(text: string, vocabulary?: Set<string>): Plausibility {
       symbols,
       singleLetterRatio,
       knownRatio: 0,
+      longKnown: 0,
       reason: "no letters",
     };
   }
@@ -111,9 +117,14 @@ export function assess(text: string, vocabulary?: Set<string>): Plausibility {
   const plausible =
     score >= 0.55 && letters >= 4 && singleLetterRatio <= 0.4 && longestWord >= 4;
 
+  const longKnown = [...new Set(tokens)].filter(
+    (token) => token.length >= EVIDENCE_WORD && (vocabulary?.has(token) ?? COMMON_WORDS.has(token)),
+  ).length;
+
   return {
     score,
     plausible,
+    longKnown,
     letters,
     symbols,
     singleLetterRatio: Math.round(singleLetterRatio * 100) / 100,
@@ -134,6 +145,34 @@ export function assess(text: string, vocabulary?: Set<string>): Plausibility {
                 ? "no vowel structure"
                 : "below threshold",
   };
+}
+
+/**
+ * Should this read become a book card?
+ *
+ * Shape alone is not enough. On a real shelf the engine returned "es BB ErEsmE" at 36%
+ * confidence with no known words at all and the shape score waved it through, leaving the
+ * reader six cards of noise to dismiss one by one.
+ *
+ * So a read needs evidence as well as shape: two known words of four letters or more, or
+ * enough confidence that the engine is clearly onto something. The confidence bar is 45
+ * because that is where real shelves actually separate — on the user's photographs the
+ * noise reads sat at 32–39% and the readable ones at 52%+, while the vocabulary is far too
+ * small to arbitrate ("chakras", "journal", "election" are not in it).
+ */
+export function acceptRead(
+  text: string,
+  confidence: number,
+  vocabulary?: Set<string>,
+  opts: { minConfidence?: number } = {},
+): { accept: boolean; reason: string; longKnown: number; score: number } {
+  const result = assess(text, vocabulary);
+  const minConfidence = opts.minConfidence ?? 45;
+  const base = { longKnown: result.longKnown, score: result.score };
+  if (!result.plausible) return { accept: false, reason: result.reason, ...base };
+  if (result.longKnown >= 2) return { accept: true, reason: "known words", ...base };
+  if (confidence >= minConfidence) return { accept: true, reason: "confident", ...base };
+  return { accept: false, reason: "too little evidence", ...base };
 }
 
 /** Convenience wrapper for call sites that only need the verdict. */

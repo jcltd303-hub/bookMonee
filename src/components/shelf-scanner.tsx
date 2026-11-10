@@ -59,6 +59,7 @@ export function ShelfScanner({ onVerify }: { onVerify: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [detector, setDetector] = useState<string>("");
+  const [lowRes, setLowRes] = useState<string>("");
 
   const leavesLeft = Math.max(0, leaveCount - boxTakes);
 
@@ -130,6 +131,10 @@ export function ShelfScanner({ onVerify }: { onVerify: () => void }) {
       if (video) {
         video.srcObject = stream;
         await video.play().catch(() => undefined);
+        // A low-resolution feed is the usual reason a legible shelf reads as noise, and
+        // it is invisible in the preview — so say it.
+        const width = video.videoWidth;
+        setLowRes(width > 0 && width < 960 ? `camera ${width}px wide` : "");
       }
       setCameraOn(true);
       startDetection();
@@ -205,7 +210,9 @@ export function ShelfScanner({ onVerify }: { onVerify: () => void }) {
         },
       );
       if (!reads.length) {
-        setError("Read the frames but no text came back. Try a brighter angle or a steadier hand.");
+        setError(
+          "Found spines but none read confidently. Move closer so the shelf fills the frame, steady the phone, and try again — or type the ISBN.",
+        );
       } else {
         refineShelf();
       }
@@ -303,6 +310,7 @@ export function ShelfScanner({ onVerify }: { onVerify: () => void }) {
             <span className="tabular-nums text-muted">
               {detector ? `${detector} detector` : ""}
               {sharpness ? ` · focus ${Math.round(sharpness.score * 100)}%` : ""}
+              {lowRes ? ` · ${lowRes}` : ""}
             </span>
           </div>
           {cameraOn && sharpness && sharpness.verdict !== "sharp" ? (
