@@ -4,6 +4,7 @@ import { buyers, buyerName } from "@/data/buyers";
 import { policyTable } from "@/lib/agents/qlearn";
 import { calibrationSummary, totalObservations } from "@/lib/market/calibrate";
 
+import { buildSha } from "@/lib/build";
 import { formatUsd } from "@/lib/geo";
 import { useRun } from "@/lib/store";
 
@@ -105,6 +106,9 @@ export function TrainTab() {
             ))}
           </tbody>
         </table>
+        <p className="text-xs text-muted">
+          Build <span className="tabular-nums">{buildSha()}</span> — if this is not the commit you just deployed, the page is cached or the deploy is stale.
+        </p>
         <p className="text-xs text-muted">
           Weights live in this browser's storage. Ship a bin on the Desk tab and that real outcome becomes a training step.
         </p>
