@@ -275,6 +275,13 @@ Two things to change when you bundle rather than host:
 - **Nothing else needs the network.** The OCR engine, the detector model and the catalogue
   are all bundled assets, so a shelf reads with no signal.
 
+## The native app
+
+`native/` holds a Kotlin / Jetpack Compose rewrite of the same app, imported from a separate
+repository — see `native/IMPORT.md` for its provenance and why it is an import rather than a
+merge. The Capacitor scaffold at `android/` is a different thing: a WebView shell around the
+web app in this repo. Two routes to an APK; `native/` is the one that is genuinely native.
+
 ## Tests
 
 `npm run test:logic` bundles the pure logic and runs it under `node --test`: ISBN

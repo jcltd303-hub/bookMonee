@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">Spine Route</string>
+    <string name="tab_route">Route</string>
+    <string name="tab_scan">Scan</string>
+    <string name="tab_desk">Desk</string>
+    <string name="tab_replace">Replace</string>
+    <string name="tab_train">Train</string>
+    <string name="app_subtitle">Denver micro-libraries</string>
+    <string name="app_description">71 mapped book boxes. Walk the shortest loop that can pay, scan the shelf, and let the desk sort what you take into a prepaid-label shipment.</string>
+</resources>

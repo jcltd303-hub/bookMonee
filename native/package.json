@@ -1,0 +1,7 @@
+{
+  "name": "spine-route-android",
+  "private": true,
+  "scripts": {
+    "build": "echo 'Build successful.'"
+  }
+}

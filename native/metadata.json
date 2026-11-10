@@ -1,0 +1,12 @@
+{
+  "name": "Spine Route",
+  "description": "Denver Little Free Libraries route planning, spine scanning, buyback desk bin packing, and trading agent",
+  "requestFramePermissions": [
+    "android.permission.CAMERA",
+    "android.permission.ACCESS_FINE_LOCATION",
+    "android.permission.ACCESS_COARSE_LOCATION"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

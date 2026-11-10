@@ -1,0 +1,13 @@
+.vercel/
+public/tesseract/
+public/models/
+node_modules/
+dist/
+.vercel/output/
+.tanstack/tmp/
+.node_modules.lock
+.DS_Store
+*.log
+.bench/
+.bench-test/
+.diag*.mjs
