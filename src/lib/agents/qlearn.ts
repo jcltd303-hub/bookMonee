@@ -23,7 +23,15 @@ export const SKIP = 0;
 export const STAGE = 1;
 export const SHIP = 2;
 
+/**
+ * Bumped whenever the action semantics or feature layout change, so weights trained
+ * under the old rules are discarded rather than silently kept. Version 2 added action
+ * masking: version 1 agents learned that "ship an empty bin" was a free action.
+ */
+export const Q_VERSION = 2;
+
 export type QAgent = {
+  version: number;
   /** actions × Q_FEATURES weights, row-major. */
   w: number[];
   eps: number;
@@ -36,6 +44,7 @@ export type QAgent = {
 
 export function makeQ(): QAgent {
   return {
+    version: Q_VERSION,
     w: new Array(Q_ACTIONS * Q_FEATURES).fill(0),
     eps: 0.9,
     episodes: 0,
@@ -48,8 +57,24 @@ export function makeQ(): QAgent {
 
 export function qShapeOk(agent: QAgent | undefined): agent is QAgent {
   return Boolean(
-    agent && Array.isArray(agent.w) && agent.w.length === Q_ACTIONS * Q_FEATURES,
+    agent &&
+      agent.version === Q_VERSION &&
+      Array.isArray(agent.w) &&
+      agent.w.length === Q_ACTIONS * Q_FEATURES,
   );
+}
+
+/**
+ * Which actions are physically possible in a state.
+ *
+ * Shipping is legal only when a bin has cleared its prepaid label — "ready" means ready,
+ * not merely non-empty. Two degenerate policies are ruled out by that one line: shipping
+ * an empty bin (free, and inherits the credit of the good books that preceded it — the
+ * policy had collapsed to "ship" in every state after 84,000 shelves), and shipping an
+ * uncleared bin, which is a guaranteed loss once the desk rejects it.
+ */
+export function legalActions(hasReady: boolean): boolean[] {
+  return [true, true, hasReady];
 }
 
 export const ACTION_LABELS = ["Skip", "Stage to the best desk", "Ship the ready bin"] as const;
@@ -69,23 +94,46 @@ export function qValues(agent: QAgent, x: number[]): number[] {
   return out;
 }
 
-export function greedy(agent: QAgent, x: number[]): number {
+/** Best legal action; illegal actions are never chosen however high their value. */
+export function greedy(agent: QAgent, x: number[], allowed?: boolean[]): number {
   const values = qValues(agent, x);
-  let best = 0;
-  for (let a = 1; a < values.length; a += 1) if (values[a] > values[best]) best = a;
-  return best;
+  let best = -1;
+  for (let a = 0; a < values.length; a += 1) {
+    if (allowed && !allowed[a]) continue;
+    if (best < 0 || values[a] > values[best]) best = a;
+  }
+  return best < 0 ? 0 : best;
 }
 
 /** Epsilon-greedy choice. Exploration decays with the agent's epsilon. */
-export function act(agent: QAgent, x: number[], random: () => number): number {
-  if (random() < agent.eps) return Math.floor(random() * Q_ACTIONS);
-  return greedy(agent, x);
+export function act(agent: QAgent, x: number[], random: () => number, allowed?: boolean[]): number {
+  if (random() < agent.eps) {
+    const options: number[] = [];
+    for (let a = 0; a < Q_ACTIONS; a += 1) if (!allowed || allowed[a]) options.push(a);
+    return options.length ? options[Math.floor(random() * options.length)] : 0;
+  }
+  return greedy(agent, x, allowed);
 }
 
 /** One semi-gradient Q-learning step. Mutates the agent's weights in place. */
-export function update(agent: QAgent, x: number[], action: number, reward: number, nextX: number[]): void {
+export function update(
+  agent: QAgent,
+  x: number[],
+  action: number,
+  reward: number,
+  nextX: number[],
+  nextAllowed?: boolean[],
+): void {
   const current = qValues(agent, x)[action] ?? 0;
-  const nextBest = Math.max(...qValues(agent, nextX));
+  // The bootstrap target is the best *legal* continuation, so an illegal ship cannot
+  // leak value backwards into the current state.
+  const nextValues = qValues(agent, nextX);
+  let nextBest = Number.NEGATIVE_INFINITY;
+  for (let a = 0; a < nextValues.length; a += 1) {
+    if (nextAllowed && !nextAllowed[a]) continue;
+    if (nextValues[a] > nextBest) nextBest = nextValues[a];
+  }
+  if (!Number.isFinite(nextBest)) nextBest = 0;
   const target = reward + agent.gamma * nextBest;
   const delta = agent.alpha * (target - current);
   const base = action * Q_FEATURES;
@@ -107,19 +155,19 @@ export function updateTerminal(agent: QAgent, x: number[], action: number, rewar
 }
 
 /** Canonical probe states, so the Train tab can show what the policy actually prefers. */
-export function probeStates(): { label: string; x: number[] }[] {
+export function probeStates(): { label: string; x: number[]; staged: boolean }[] {
   return [
-    { label: "Good book, bins empty", x: [0.6, 1.4, 0, 0, 0, 0.8, 0] },
-    { label: "Good book, label nearly clear", x: [0.5, 1.2, 0.85, 0.7, 0.6, 0.1, 0] },
-    { label: "Thin book, label already clear", x: [0.08, -0.2, 1, 0.8, 1, 0, 1] },
-    { label: "Bad book, bins empty", x: [0.02, -0.6, 0, 0, 0, 0.9, 0] },
+    { label: "Good book, bins empty", x: [0.6, 1.4, 0, 0, 0, 0.8, 0], staged: false },
+    { label: "Good book, label nearly clear", x: [0.5, 1.2, 0.85, 0.7, 0.6, 0.1, 0], staged: false },
+    { label: "Thin book, label already clear", x: [0.08, -0.2, 1, 0.8, 1, 0, 1], staged: true },
+    { label: "Bad book, bins empty", x: [0.02, -0.6, 0, 0, 0, 0.9, 0], staged: false },
   ];
 }
 
 export function policyTable(agent: QAgent): { label: string; action: string; value: number }[] {
   return probeStates().map((probe) => {
     const values = qValues(agent, probe.x);
-    const best = greedy(agent, probe.x);
+    const best = greedy(agent, probe.x, legalActions(probe.staged));
     return {
       label: probe.label,
       action: actionLabel(best),

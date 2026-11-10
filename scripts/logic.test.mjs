@@ -28,7 +28,12 @@ import {
   packBins,
   UNIT_COST_USD,
   makeQ,
+  qShapeOk,
   greedy,
+  legalActions,
+  Q_VERSION,
+  anyReady,
+  makeEnv,
   policyTable,
   pretrainedAgent,
   runEpisode,
@@ -289,6 +294,43 @@ test("a live offer beats the model and is marked live", () => {
   assert.equal(liveRun.modelled, false);
   assert.equal(modelRun.modelled, true);
   assert.notEqual(modelRun.offerUsd, 9.99);
+});
+
+test("an illegal action is never chosen, however high its value", () => {
+  assert.deepEqual(legalActions(false), [true, true, false], "no cleared bin, no shipping");
+  assert.deepEqual(legalActions(true), [true, true, true]);
+  // A ship value that dwarfs everything, in a state with nothing to ship.
+  const agent = makeQ();
+  agent.w[2 * 7 + 0] = 999;
+  const x = [0.6, 1.4, 0, 0, 0, 0.8, 0];
+  assert.equal(greedy(agent, x), 2, "without masking the huge ship value wins");
+  const masked = greedy(agent, x, legalActions(false));
+  assert.notEqual(masked, 2, "with masking it cannot be chosen");
+  assert.ok(legalActions(false)[masked], "and the choice is a legal one");
+});
+
+test("a bin is only ready when it has cleared its label", () => {
+  const env = makeEnv();
+  env.bins[0] = 2; // below the first desk's label
+  assert.equal(anyReady(env), false);
+  env.bins[0] = (env.thresholds[0] ?? 0) + 1;
+  assert.equal(anyReady(env), true);
+});
+
+test("weights from an older action model are discarded", () => {
+  assert.equal(makeQ().version, Q_VERSION);
+  assert.equal(qShapeOk({ ...makeQ(), version: Q_VERSION - 1 }), false, "v1 agents are not reused");
+});
+
+test("the policy still holds after a long run", () => {
+  // The collapse this guards against appeared only after tens of thousands of shelves:
+  // at 84,000 the policy was "ship" in every state, including with empty bins.
+  const agent = pretrainedAgent(20000);
+  const policy = Object.fromEntries(policyTable(agent).map((row) => [row.label, row.action]));
+  assert.equal(policy["Good book, bins empty"], "Stage to the best desk");
+  assert.equal(policy["Good book, label nearly clear"], "Stage to the best desk");
+  assert.equal(policy["Thin book, label already clear"], "Ship the ready bin");
+  assert.equal(policy["Bad book, bins empty"], "Skip");
 });
 
 test("the trading agent starts ignorant and learns to make money", () => {

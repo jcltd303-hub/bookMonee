@@ -10,6 +10,6 @@ export { quotesFor, offerFrom, UNIT_COST_USD } from "@/lib/market/quote";
 export { recordObservation, adjustedRate, ratesFor, totalObservations, PRIOR_STRENGTH } from "@/lib/market/calibrate";
 export { matchBuyer, normaliseOffers, offersByDesk, quoteEndpoint, liveQuotesEnabled } from "@/lib/market/live";
 export { packBins, binCash } from "@/lib/market/pack";
-export { makeQ, qShapeOk, greedy, policyTable } from "@/lib/agents/qlearn";
-export { pretrainedAgent, runEpisode, mulberry32, makeEnv } from "@/lib/agents/sim";
+export { makeQ, qShapeOk, greedy, legalActions, policyTable, Q_VERSION } from "@/lib/agents/qlearn";
+export { pretrainedAgent, runEpisode, mulberry32, makeEnv, anyReady } from "@/lib/agents/sim";
 export { buyers } from "@/data/buyers";

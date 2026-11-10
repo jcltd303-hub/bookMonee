@@ -1,6 +1,6 @@
 import { buyers } from "@/data/buyers";
 import { UNIT_COST_USD } from "@/lib/market/quote";
-import { Q_FEATURES, SHIP, SKIP, STAGE, act, makeQ, update, type QAgent } from "@/lib/agents/qlearn";
+import { Q_FEATURES, SHIP, SKIP, STAGE, act, legalActions, makeQ, update, type QAgent } from "@/lib/agents/qlearn";
 
 /**
  * Synthetic wholesale market used to pre-train the trading agent on device.
@@ -125,6 +125,11 @@ export function step(env: SimEnv, book: SimBook, action: number): number {
   return staged >= threshold ? staged - friction : -FLUSH_PENALTY;
 }
 
+/** True when at least one bin has cleared its prepaid label. */
+export function anyReady(env: SimEnv): boolean {
+  return env.bins.some((value, index) => value > 0 && value >= (env.thresholds[index] ?? 0));
+}
+
 export type EpisodeResult = { reward: number; steps: number };
 
 export function runEpisode(
@@ -138,14 +143,17 @@ export function runEpisode(
   let total = 0;
   let book = drawBook(random);
   let x = featuresOf(book, env);
+  let allowed = legalActions(anyReady(env));
   for (let t = 0; t < steps; t += 1) {
-    const action = act(probe, x, random);
+    const action = act(probe, x, random, allowed);
     const reward = step(env, book, action);
     total += reward;
     book = drawBook(random);
     const nextX = featuresOf(book, env);
-    if (opts.learn) update(agent, x, action, reward, nextX);
+    const nextAllowed = legalActions(anyReady(env));
+    if (opts.learn) update(agent, x, action, reward, nextX, nextAllowed);
     x = nextX;
+    allowed = nextAllowed;
   }
   return { reward: Math.round(total * 100) / 100, steps };
 }

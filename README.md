@@ -164,6 +164,22 @@ Licences worth knowing before shipping weights: the open-shelves dataset is
 **AGPL-3.0**. The app code around it is unaffected; the weights you choose carry their own
 terms.
 
+## The trading agent
+
+Three actions — skip, stage the best desk, ship a ready bin — over seven state features,
+trained on the device against a simulated market. Two rules keep it honest:
+
+- **Ship is only legal when a bin has cleared its prepaid label.** Without that, the agent
+  finds that a no-op ship is free and, because shipping always follows good books, it
+  inherits their credit. At 84,000 simulated shelves the policy had collapsed to "ship the
+  ready bin" in every state, including with empty bins. Masking the action fixed it, and
+  `legalActions` is now the single place that decides.
+- **Weights carry a version.** Changing the action semantics bumps `Q_VERSION`, so a browser
+  holding a collapsed agent discards it and retrains rather than keeping it forever.
+
+The policy is now stable from 400 to 84,000 simulated shelves: stage a good book, ship only
+a cleared bin, skip a bad one. A test trains 20,000 shelves and asserts exactly that.
+
 ## Shelf matching
 
 Each spine is resolved on its own while it streams, but a shelf is a *set* of books, and
