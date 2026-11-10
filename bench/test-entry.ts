@@ -1,7 +1,7 @@
 /** What the Node test suite imports: the pure logic, bundled so it runs without aliases. */
 export { acceptRead, assess } from "@/lib/scan/plausibility";
 export { assignTitles } from "@/lib/scan/match";
-export { decodeYolo, nonMaxSuppression, toFrameBoxes, unletterbox } from "@/lib/scan/yolo";
+export { decodeObb, decodeYolo, nonMaxSuppression, rotatedToAabb, toFrameBoxes, unletterbox } from "@/lib/scan/yolo";
 export { decodeEntities } from "@/lib/text";
 export { extractIsbn, cleanSpineText } from "@/lib/scan/resolve";
 export { sameBook, supersedes, titleOverlap } from "@/lib/scan/dedupe";

@@ -16,7 +16,9 @@ import {
   assess,
   assignTitles,
   catalogVocabulary,
+  decodeObb,
   decodeYolo,
+  rotatedToAabb,
   nonMaxSuppression,
   toFrameBoxes,
   unletterbox,
@@ -123,6 +125,29 @@ test("YOLO output decodes in both layouts", () => {
   // Float32 in the tensor, so compare with a tolerance rather than against 0.9 exactly.
   assert.ok(Math.abs(b[0].score - 0.9) < 1e-6, `score ${b[0].score}`);
   assert.equal(b[0].x, 100);
+});
+
+test("an oriented box model is decoded, and its angle becomes bounds", () => {
+  // Ultralytics OBB layout: [cx, cy, w, h, score, angle] as rows, one anchor per column.
+  const data = new Float32Array([
+    100, 300, // cx
+    200, 200, // cy
+    40, 60, // w
+    300, 80, // h
+    0.9, 0.1, // score
+    0, Math.PI / 4, // angle
+  ]);
+  const boxes = decodeObb(data, [6, 2], { minScore: 0.35 });
+  assert.equal(boxes.length, 1, "the low-score anchor is dropped");
+  // Angle 0: bounds are the box itself.
+  assert.deepEqual({ w: Math.round(boxes[0].w), h: Math.round(boxes[0].h) }, { w: 40, h: 300 });
+
+  // At 45 degrees a 40x100 box bounds to about 99x99: wider than the box, shorter than its
+  // length, and square — which is what "contains the rotation" actually means.
+  const tilted = rotatedToAabb(100, 200, 40, 100, Math.PI / 4);
+  assert.equal(Math.round(tilted.w), 99);
+  assert.equal(Math.round(tilted.h), 99);
+  assert.ok(tilted.w > 40, "wider than the unrotated box");
 });
 
 test("overlapping detections collapse, separate ones survive", () => {

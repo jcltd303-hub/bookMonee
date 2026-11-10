@@ -81,6 +81,53 @@ export function decodeYolo(
   return boxes;
 }
 
+/**
+ * Axis-aligned bounds of a rotated box.
+ *
+ * Ultralytics OBB models — and the best public book-spine work is oriented-box — return a
+ * centre, width, height and angle. The crop pipeline takes axis-aligned boxes, so the
+ * rotation is resolved into its bounding rectangle. For a spine tilted a few degrees that
+ * is a slightly padded crop, which costs nothing; ignoring the angle would cut the text.
+ */
+export function rotatedToAabb(cx: number, cy: number, w: number, h: number, angleRad: number): RawBox {
+  const cos = Math.abs(Math.cos(angleRad));
+  const sin = Math.abs(Math.sin(angleRad));
+  const width = w * cos + h * sin;
+  const height = w * sin + h * cos;
+  return { x: cx, y: cy, w: width, h: height, score: 0 };
+}
+
+/**
+ * Decode an oriented-box tensor: `[4 + classes + 1, anchors]`, where the trailing row is
+ * the angle in radians. Same layout otherwise as the axis-aligned decoder.
+ */
+export function decodeObb(
+  data: Float32Array,
+  dims: [number, number],
+  opts: { minScore: number },
+): RawBox[] {
+  const [rows, anchors] = dims;
+  const classes = rows - 5;
+  if (classes < 1) return [];
+  const boxes: RawBox[] = [];
+  for (let a = 0; a < anchors; a += 1) {
+    let best = 0;
+    for (let c = 0; c < classes; c += 1) {
+      const score = data[(4 + c) * anchors + a];
+      if (score > best) best = score;
+    }
+    if (best < opts.minScore) continue;
+    const cx = data[0 * anchors + a];
+    const cy = data[1 * anchors + a];
+    const w = data[2 * anchors + a];
+    const h = data[3 * anchors + a];
+    const angle = data[(rows - 1) * anchors + a];
+    const box = rotatedToAabb(cx, cy, w, h, angle);
+    boxes.push({ ...box, score: best });
+  }
+  return boxes;
+}
+
 function iou(a: RawBox, b: RawBox): number {
   const ax2 = a.x + a.w / 2;
   const ay2 = a.y + a.h / 2;

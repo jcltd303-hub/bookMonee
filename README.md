@@ -148,8 +148,18 @@ Two ways to find the books, in order:
    detector exported to ONNX through ONNX Runtime Web (MIT) — on the device, no API key,
    no cloud call, no per-request cost. The file is `public/models/spines.onnx`, which is
    gitignored; install one with `npm run fetch:model -- ./best.onnx` or
-   `SPINE_MODEL_URL=… npm run fetch:model`. Any export works:
-   `yolo export model=best.pt format=onnx imgsz=640`.
+   `SPINE_MODEL_URL=… npm run fetch:model`. Either export works:
+
+   ```
+   yolo export model=best.pt     format=onnx imgsz=640            # axis-aligned detector
+   yolo export model=best-obb.pt format=onnx imgsz=1024           # oriented boxes
+   VITE_SPINE_MODEL_TASK=obb                                      # …when you used the second
+   ```
+
+   Oriented boxes are supported because the public book-spine work that handles tilted
+   books is oriented-box (ASC-YOLOv8, AGPL-3.0, reports 99.4 mAP50 on a spine dataset but
+   ships no checkpoints), and tilt is exactly where the segmenter fails. The angle is
+   resolved into axis-aligned bounds for the crop.
 2. **The local segmenter** (`src/lib/scan/spines.ts`) otherwise: column gradients, peaks,
    a tall-and-narrow prior. No model, no network, and the reason three spines in the
    benchmark are never read — it merges books that touch.
@@ -160,9 +170,11 @@ lazily. Any failure — missing file, bad tensor, unsupported op — falls back 
 segmenter. The scanner shows which detector produced the boxes.
 
 Licences worth knowing before shipping weights: the open-shelves dataset is
-**CC BY-NC-SA 4.0** (non-commercial, share-alike), and Ultralytics' ONNX exporter is
-**AGPL-3.0**. The app code around it is unaffected; the weights you choose carry their own
-terms.
+**CC BY-NC-SA 4.0** (non-commercial, share-alike), Ultralytics' ONNX exporter is
+**AGPL-3.0**, and ASC-YOLOv8 is AGPL-3.0. No public repo ships ready-made spine
+checkpoints — `capjamesg/open-shelves` has the dataset only, `susnazariy/YOLO-OCR-BookSpineDetectionRecognition`
+is MIT but calls Roboflow's API. So a model means training or exporting one, and the weights
+you choose carry their own terms.
 
 ## The trading agent
 

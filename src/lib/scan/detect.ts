@@ -1,4 +1,4 @@
-import { nonMaxSuppression, decodeYolo, toFrameBoxes, type Letterbox } from "@/lib/scan/yolo";
+import { nonMaxSuppression, decodeObb, decodeYolo, toFrameBoxes, type Letterbox } from "@/lib/scan/yolo";
 import type { SpineBox } from "@/lib/scan/spines";
 
 /**
@@ -16,6 +16,12 @@ import type { SpineBox } from "@/lib/scan/spines";
 export type DetectorResult = { boxes: SpineBox[]; detector: string };
 
 const MODEL_URL = "/models/spines.onnx";
+/**
+ * What the model outputs. Ultralytics OBB exports add an angle channel, and the public
+ * book-spine work that handles tilted books is oriented — so the task is configuration,
+ * not a guess: set VITE_SPINE_MODEL_TASK=obb when you export that way.
+ */
+const TASK = (import.meta.env as Record<string, string | undefined>).VITE_SPINE_MODEL_TASK === "obb" ? "obb" : "detect";
 const INPUT = 640;
 const MIN_SCORE = 0.35;
 const IOU = 0.45;
@@ -90,16 +96,13 @@ export async function detectSpines(canvas: HTMLCanvasElement): Promise<DetectorR
     const dims = first.dims as number[];
     const data = first.data as Float32Array;
 
-    // [1, 4+classes, anchors] is the transposed layout most exporters emit;
-    // [1, anchors, 4+classes] is the other. Decide from which axis is 4+classes.
-    let raw;
-    if (dims.length === 3) {
-      const [, a, b] = dims;
-      const transposed = a < b;
-      raw = decodeYolo(data, transposed ? [a, b] : [a, b], { transposed, minScore: MIN_SCORE });
-    } else {
-      raw = decodeYolo(data, [dims[1] ?? 0, dims[2] ?? 0], { transposed: true, minScore: MIN_SCORE });
-    }
+    // Exports come as [1, channels, anchors]; channels is 4+classes for a detector and
+    // 5+classes for an oriented-box model.
+    const [, rows, anchors] = dims.length === 3 ? dims : [1, dims[1] ?? 0, dims[2] ?? 0];
+    const raw =
+      TASK === "obb"
+        ? decodeObb(data, [rows, anchors], { minScore: MIN_SCORE })
+        : decodeYolo(data, [rows, anchors], { transposed: rows < anchors, minScore: MIN_SCORE });
 
     const boxes = toFrameBoxes(nonMaxSuppression(raw, IOU), box, canvas.width, canvas.height);
     if (!boxes.length) return null;
