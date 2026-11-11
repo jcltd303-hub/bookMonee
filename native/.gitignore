@@ -1,13 +1,16 @@
-.vercel/
-public/tesseract/
-public/models/
-node_modules/
-dist/
-.vercel/output/
-.tanstack/tmp/
-.node_modules.lock
-.DS_Store
-*.log
-.bench/
-.bench-test/
-.diag*.mjs
+# Gradle and Android build output. The source repository committed .gradle/ (1.7 MB of
+# executionHistory.bin and friends); this is why the import excluded it.
+.gradle/
+build/
+app/build/
+captures/
+.cxx/
+.externalNativeBuild/
+
+# Machine-specific: the SDK path. Never commit it — set ANDROID_HOME instead, or write it here.
+local.properties
+
+# IDE
+.idea/
+*.iml
+*.hprof

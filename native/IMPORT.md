@@ -52,6 +52,32 @@ java -version    # must say 21
 
 Or set `org.gradle.java.home=/path/to/jdk-21` in `gradle.properties` to keep it permanent.
 
+**The Android SDK.** `compileSdk = 35` and `targetSdk = 35`, so platform 35 and build-tools 35
+are needed. Either open the project in Android Studio (which installs both and writes
+`local.properties` for you), or from the command line:
+
+```bash
+mkdir -p ~/android-sdk/cmdline-tools && cd /tmp
+# get the current "command line tools only" zip from developer.android.com/studio
+curl -LO https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+unzip -q commandlinetools-linux-*.zip -d ~/android-sdk/cmdline-tools
+mv ~/android-sdk/cmdline-tools/cmdline-tools ~/android-sdk/cmdline-tools/latest
+
+export ANDROID_HOME=$HOME/android-sdk
+export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
+yes | sdkmanager --licenses
+sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+```
+
+Then either export `ANDROID_HOME` in your shell profile, or write the path once:
+
+```bash
+echo "sdk.dir=$HOME/android-sdk" > native/local.properties
+```
+
+`local.properties` is gitignored on purpose: it holds an absolute path that is wrong on every
+other machine.
+
 Two things worth reading first, because they are the parts the web app does not have:
 
 - `app/src/main/java/com/example/spineroute/domain/SpineAiAnalyzer.kt` — on-device spine

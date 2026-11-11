@@ -284,7 +284,8 @@ Two things to change when you bundle rather than host:
 
 Build it from `native/` — `cd native && ./gradlew assembleDebug`. Needs **JDK 21** (the module
 targets `jvmTarget 21`; on Java 24+ Gradle fails with a bare version string as the error) and
-the Android SDK platform 35. That is a different project from the Capacitor shell in `android/`, which is built
+the Android SDK platform 35 (Android Studio installs it; `native/IMPORT.md` has the
+command-line equivalent). That is a different project from the Capacitor shell in `android/`, which is built
 from the repo root with `npm run build:native && npx cap sync android`.
 
 `native/` holds a Kotlin / Jetpack Compose rewrite of the same app, imported from a separate
