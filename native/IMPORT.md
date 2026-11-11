@@ -29,8 +29,28 @@ cd native
 ./gradlew assembleDebug        # app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Needs JDK 17 and the Android SDK (platform 35, build-tools as AGP requires). Android Studio
-will offer to install both.
+Needs **JDK 21** and the Android SDK (platform 35, build-tools as AGP requires).
+
+JDK 21 specifically: the module targets `jvmTarget = "21"`, Gradle 8.10.2 cannot run on Java
+24 or newer, and AGP 8.8.0 does not support them either. On Java 25 the build fails with
+
+```
+FAILURE: Build failed with an exception.
+* What went wrong:
+25.0.4.1
+```
+
+which is the JDK version string rather than anything in the source. Point Gradle at a 21:
+
+```bash
+# whichever you have: apt install openjdk-21-jdk, dnf install java-21-openjdk-devel,
+# sdk install java 21.0.7-tem, or mise use java@21
+export JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java))))
+java -version    # must say 21
+./gradlew assembleDebug
+```
+
+Or set `org.gradle.java.home=/path/to/jdk-21` in `gradle.properties` to keep it permanent.
 
 Two things worth reading first, because they are the parts the web app does not have:
 
