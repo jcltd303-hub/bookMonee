@@ -282,6 +282,10 @@ Two things to change when you bundle rather than host:
 
 ## The native app
 
+Build it from `native/` — `cd native && ./gradlew assembleDebug` (JDK 17 and the Android SDK
+needed). That is a different project from the Capacitor shell in `android/`, which is built
+from the repo root with `npm run build:native && npx cap sync android`.
+
 `native/` holds a Kotlin / Jetpack Compose rewrite of the same app, imported from a separate
 repository — see `native/IMPORT.md` for its provenance and why it is an import rather than a
 merge. The Capacitor scaffold at `android/` is a different thing: a WebView shell around the

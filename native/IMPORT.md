@@ -20,6 +20,18 @@ It sits under `native/` because it collides with the web app at the root — bot
 `package.json`, a `README.md` and a `.gitignore`, and this one has its own `app/` Gradle
 module alongside the Capacitor `android/` at the top level.
 
+**Building it.** The source repository never committed a Gradle wrapper, so `./gradlew` did not
+exist here; one is now included, pinned to Gradle 8.10.2 because AGP 8.8.0 requires it (the
+Capacitor project's 8.2.1 is too old):
+
+```bash
+cd native
+./gradlew assembleDebug        # app/build/outputs/apk/debug/app-debug.apk
+```
+
+Needs JDK 17 and the Android SDK (platform 35, build-tools as AGP requires). Android Studio
+will offer to install both.
+
 Two things worth reading first, because they are the parts the web app does not have:
 
 - `app/src/main/java/com/example/spineroute/domain/SpineAiAnalyzer.kt` — on-device spine
